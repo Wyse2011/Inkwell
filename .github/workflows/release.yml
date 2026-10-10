@@ -1,0 +1,58 @@
+name: Build and Release
+
+# Run manually from the Actions tab: Actions > Build and Release > Run workflow.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          $dalamud = "$env:APPDATA\XIVLauncher\addon\Hooks\dev"
+          New-Item -ItemType Directory -Force -Path $dalamud | Out-Null
+          Invoke-WebRequest -Uri "https://goatcorp.github.io/dalamud-distrib/latest.zip" -OutFile dalamud.zip
+          Expand-Archive -Path dalamud.zip -DestinationPath $dalamud -Force
+          "DALAMUD_HOME=$dalamud\" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Download dictionary (if the repo doesn't have one)
+        shell: pwsh
+        run: |
+          $dict = "Inkwell/Dictionary/en_US.txt"
+          if (-not (Test-Path $dict)) {
+            New-Item -ItemType Directory -Force -Path "Inkwell/Dictionary" | Out-Null
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt" -OutFile $dict
+          }
+
+      - name: Read version from Inkwell.csproj
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content Inkwell/Inkwell.csproj
+          $v = ($proj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build
+        run: dotnet build Inkwell/Inkwell.csproj -c Release
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Inkwell v${{ steps.version.outputs.version }}
+          files: Inkwell/bin/**/latest.zip
+          fail_on_unmatched_files: true
+          make_latest: true
