@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 
 namespace Inkwell.Windows;
@@ -14,7 +15,7 @@ public sealed class ConfigWindow : Window
     {
         this.plugin = plugin;
         config = plugin.Configuration;
-        Size = new Vector2(440, 480);
+        Size = new Vector2(460, 560);
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
@@ -70,10 +71,69 @@ public sealed class ConfigWindow : Window
             changed |= ImGui.Checkbox("Clear text after the last chunk is copied", ref config.ClearAfterLastCopy);
         }
 
+        DrawAppearance();
+
         if (changed)
         {
             config.Save();
             plugin.ScratchPad.OnSettingsChanged();
         }
+    }
+
+    private void DrawAppearance()
+    {
+        if (!ImGui.CollapsingHeader("Appearance (colors and transparency)")) return;
+
+        ImGui.TextWrapped("Tick a box to use your own color for that part of the scratch pad. " +
+                          "The A value (or the strip under the color picker) controls transparency: " +
+                          "255 is solid, 0 is invisible. Unticked items keep the default look.");
+
+        if (ImGui.Button("Reset all colors"))
+        {
+            config.ThemeOverrides.Clear();
+            config.Save();
+        }
+
+        var flags = ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.AlphaPreviewHalf;
+        var groupColor = new Vector4(0.6f, 0.75f, 1f, 1f);
+        string? group = null;
+        var save = false;
+
+        foreach (var entry in Theme.Entries)
+        {
+            if (entry.Group != group)
+            {
+                group = entry.Group;
+                ImGui.Spacing();
+                ImGui.TextColored(groupColor, group);
+                ImGui.Separator();
+            }
+
+            using var id = ImRaii.PushId(entry.Key);
+
+            var on = config.ThemeOverrides.TryGetValue(entry.Key, out var color);
+            if (!on) color = Theme.Default(entry);
+
+            if (ImGui.Checkbox("##on", ref on))
+            {
+                if (on) config.ThemeOverrides[entry.Key] = color;
+                else config.ThemeOverrides.Remove(entry.Key);
+                save = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(on ? "Using your color. Untick to go back to the default." : "Tick to customize.");
+
+            ImGui.SameLine();
+            using (ImRaii.Disabled(!on))
+            {
+                ImGui.SetNextItemWidth(220);
+                if (ImGui.ColorEdit4(entry.Label, ref color, flags))
+                    config.ThemeOverrides[entry.Key] = color;   // Live preview while dragging.
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    save = true;                               // Save once you let go.
+            }
+        }
+
+        if (save) config.Save();
     }
 }

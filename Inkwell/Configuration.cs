@@ -38,5 +38,9 @@ public class Configuration : IPluginConfiguration
     public bool HighlightBackground = false;
     public Vector4 MisspellColor = new(1f, 0.35f, 0.35f, 1f);
 
+    // ---- Appearance ----
+    /// <summary>Custom colors keyed by Theme entry. Missing key = use the default look.</summary>
+    public Dictionary<string, Vector4> ThemeOverrides = new();
+
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 }

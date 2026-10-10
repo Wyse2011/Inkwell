@@ -11,6 +11,10 @@ It also keeps the core Wordsmith flow: chat header picker (including /tell with 
 toggle, automatic chunking at 500 bytes with `(#c/#m)` continuation markers, one-click "copy next
 chunk", and click-a-word to see suggestions or add it to your dictionary.
 
+**Custom colors:** `/inkwell config` → **Appearance** lets you recolor the title bar, window
+background, toolbar, preview panel, text box, resize bar and status text, each with its own
+transparency.
+
 ## Install (for players)
 
 Copy this custom repository URL:

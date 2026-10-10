@@ -17,14 +17,11 @@ public sealed class ScratchPadWindow : Window
     private const float SplitterHeight = 6f;
     private const int MaxWordButtons = 25;
 
-    private static readonly Vector4 Red = new(1f, 0.4f, 0.4f, 1f);
-    private static readonly Vector4 Green = new(0.5f, 0.9f, 0.5f, 1f);
-    private static readonly Vector4 Yellow = new(1f, 0.85f, 0.3f, 1f);
-    private static readonly Vector4 Dim = new(0.6f, 0.6f, 0.6f, 1f);
-
     private readonly Plugin plugin;
     private readonly Configuration config;
     private readonly SpellTextEditor editor;
+
+    private ThemePush windowTheme;
 
     private List<string> chunks = new();
     private string chunkKey = string.Empty;
@@ -50,6 +47,16 @@ public sealed class ScratchPadWindow : Window
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
+    private Vector4 Red => Theme.Accent(config, "status.error");
+    private Vector4 Green => Theme.Accent(config, "status.ok");
+    private Vector4 Yellow => Theme.Accent(config, "status.warn");
+    private Vector4 Dim => Theme.Accent(config, "status.muted");
+
+    // Window-wide colors (title bar, background...) must be pushed before the window begins,
+    // which is what PreDraw is for. PostDraw runs after the window ends.
+    public override void PreDraw() => windowTheme = Theme.Push(config, ThemeScope.Window);
+    public override void PostDraw() => windowTheme.Dispose();
+
     /// <summary>Called by the settings window whenever something changes.</summary>
     public void OnSettingsChanged()
     {
@@ -71,9 +78,13 @@ public sealed class ScratchPadWindow : Window
         var editorHeight = Math.Clamp(config.EditorHeight, MinEditorHeight, maxEditor);
         var previewHeight = MathF.Max(MinPreviewHeight, avail.Y - editorHeight - SplitterHeight - spacing * 2);
 
-        DrawPreview(new Vector2(0, previewHeight));
+        using (Theme.Push(config, ThemeScope.Preview))
+            DrawPreview(new Vector2(0, previewHeight));
+
         DrawSplitter(avail.X, editorHeight, maxEditor);
-        editor.Draw(new Vector2(0, editorHeight));
+
+        using (Theme.Push(config, ThemeScope.Editor))
+            editor.Draw(new Vector2(0, editorHeight));
     }
 
     // ------------------------------------------------------------------ toolbar
@@ -132,8 +143,8 @@ public sealed class ScratchPadWindow : Window
         var warn = editor.Misspellings.Count > 0;
 
         using (ImRaii.Disabled(!hasChunks))
-        using (ImRaii.PushColor(ImGuiCol.Button, new Vector4(0.55f, 0.2f, 0.2f, 1f), warn))
-        using (ImRaii.PushColor(ImGuiCol.ButtonHovered, new Vector4(0.7f, 0.25f, 0.25f, 1f), warn))
+        using (ImRaii.PushColor(ImGuiCol.Button, Theme.Accent(config, "copy.warn"), warn))
+        using (ImRaii.PushColor(ImGuiCol.ButtonHovered, Theme.Accent(config, "copy.warn.hover"), warn))
         {
             if (ImGui.Button(label))
             {
@@ -268,7 +279,7 @@ public sealed class ScratchPadWindow : Window
         for (int i = 0; i < chunks.Count; i++)
         {
             var label = i == copyIndex ? $"Chunk {i + 1} (next to copy)" : $"Chunk {i + 1}";
-            ImGui.TextColored(i == copyIndex ? Green : Dim, label);
+            ImGui.TextColored(i == copyIndex ? Theme.Accent(config, "preview.next") : Dim, label);
             DrawFlowText(chunks[i]);
             if (i < chunks.Count - 1) ImGui.Separator();
         }
@@ -323,7 +334,7 @@ public sealed class ScratchPadWindow : Window
         var min = ImGui.GetItemRectMin();
         var max = ImGui.GetItemRectMax();
         var mid = (min.Y + max.Y) / 2f;
-        var col = ImGui.GetColorU32(active ? ImGuiCol.SeparatorActive : hovered ? ImGuiCol.SeparatorHovered : ImGuiCol.Separator);
+        var col = ImGui.GetColorU32(Theme.Accent(config, active || hovered ? "splitter.hover" : "splitter"));
         ImGui.GetWindowDrawList().AddRectFilled(new Vector2(min.X, mid - 1), new Vector2(max.X, mid + 1), col);
     }
 }
