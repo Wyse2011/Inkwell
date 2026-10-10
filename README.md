@@ -1,24 +1,59 @@
 # Inkwell
 
-A Wordsmith-style roleplay scratch pad for Dalamud, with two changes:
+A roleplay scratch pad for FINAL FANTASY XIV, built on Dalamud. Write long posts in a
+comfortable editor, catch typos before they go out, and send them to chat in correctly-headed,
+correctly-sized chunks.
 
-1. **Resizable editor.** Drag the bar between the chunk preview and the text box to make the
-   editor as tall as you want. The height is saved.
-2. **Misspellings highlighted where you type.** Misspelled words are drawn in red (plus an
-   optional squiggle or background) directly in the bottom text box, not only in the preview.
+## Credit where it's due: Inkwell is built on Wordsmith
 
-It also keeps the core Wordsmith flow: chat header picker (including /tell with a target), OOC
-toggle, automatic chunking at 500 bytes with `(#c/#m)` continuation markers, one-click "copy next
-chunk", and click-a-word to see suggestions or add it to your dictionary.
+Inkwell is **not an original idea.** Its framework (the scratch pad, the chunk preview above
+the text box, chat headers, continuation markers, the OOC toggle, spell check, and the
+one-click "copy the next chunk" workflow) comes straight from
+**[Wordsmith](https://github.com/MythicPalette/Wordsmith-DalamudPlugin)** by
+**[MythicPalette](https://github.com/MythicPalette)**.
 
-**Send to chat:** the **Send to chat** button (top right, next to Copy) posts the next chunk
-straight into chat. One click sends one chunk; Copy and Send share the same counter, so they
-always point at the same chunk. Text is run through the game's own chat filter and the 500-byte
-limit before sending, and nothing is ever sent without a click.
+A huge shoutout to MythicPalette for all the work he has put into Wordsmith. It has made
+in-game roleplay easier for a lot of people, and Inkwell exists only because Wordsmith showed
+how good this kind of tool can be. If you like Inkwell, please go star Wordsmith too.
 
-**Custom colors:** `/inkwell config` → **Appearance** lets you recolor the title bar, window
-background, toolbar, preview panel, text box, resize bar and status text, each with its own
-transparency.
+Inkwell's code was written from scratch rather than forked, so any bugs in Inkwell are Inkwell's
+own and should be reported here, not to Wordsmith.
+
+**Wordsmith repository:** https://github.com/MythicPalette/Wordsmith-DalamudPlugin
+
+## What Inkwell changes and adds
+
+Quality-of-life changes on top of the Wordsmith-style workflow:
+
+- **Resizable text box.** Drag the bar between the chunk preview and the text box to make the
+  editor as large as you like. The size is remembered between sessions.
+- **Misspellings highlighted where you type.** Misspelled words are marked directly in the
+  text box at the bottom (red text, a squiggly underline and/or a background highlight, your
+  choice), not only in the preview, so they're easy to find before you copy.
+- **Click-to-fix spelling bar.** Every misspelled word is listed as a button above the preview.
+  Click one to pick a suggestion, type a replacement, or add the word to your personal
+  dictionary.
+- **Send to chat.** A **Send to chat** button sits next to **Copy** at the top right. Each click
+  posts exactly one chunk to chat; click again for the next. Text is checked against the game's
+  own chat filter and the 500-byte limit first, and nothing is ever sent without a click.
+- **Copy and Send stay in sync.** Both buttons share one counter ("Copy 2/3", "Send to chat
+  2/3"), so using either one moves both to the next chunk.
+- **Safety checks before sending.** Optional "Send anyway?" confirmation when there are spelling
+  errors, a short cooldown so a double-click can't send two chunks, and a block on chunks that
+  would be run as a game command when no chat channel is selected.
+- **Spelling warning on the buttons.** Copy and Send turn red while there are possible spelling
+  errors, with a tooltip showing how many.
+- **Full color and transparency customization.** Under Settings, then Appearance, you can recolor
+  the title bar, window background, border, text, toolbar buttons and fields, preview panel, text
+  box, resize bar, scrollbars and status messages, each with its own transparency.
+- **Status line.** A short message confirms each copy or send, or explains why a send was
+  blocked.
+
+### Wordsmith features Inkwell doesn't have (yet)
+
+To be upfront: Wordsmith still does more in some areas. Inkwell currently has a single scratch
+pad, no thesaurus, and no custom chat aliases. If you rely on those, Wordsmith is the better
+choice for now.
 
 ## Install (for players)
 
@@ -34,7 +69,8 @@ https://raw.githubusercontent.com/Wyse2011/Inkwell/main/repo.json
 3. Type `/xlplugins`, search for **Inkwell**, and click **Install**.
 4. Type `/inkwell` to open the scratch pad, or `/inkwell config` for settings.
 
-Inkwell is a third-party plugin and is not affiliated with or reviewed by the Dalamud team.
+Inkwell is a third-party plugin and is not affiliated with Square Enix, Wordsmith or
+MythicPalette.
 
 ---
 
@@ -128,3 +164,12 @@ ImGui can't color individual words inside a text box, so Inkwell draws over it:
 - Custom chat aliases (e.g. `/friendo` for a frequent /tell target).
 - Multiple scratch pads.
 - Typing `/p` or `/em` at the start of the text to switch the header automatically.
+
+## Acknowledgements
+
+- [Wordsmith](https://github.com/MythicPalette/Wordsmith-DalamudPlugin) by MythicPalette, the
+  plugin whose design and workflow Inkwell is built on.
+- [Dalamud](https://github.com/goatcorp/Dalamud) and the goatcorp team.
+- [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs), used for sending chat.
+- [dwyl/english-words](https://github.com/dwyl/english-words) (public domain), the default
+  spell-check word list.
