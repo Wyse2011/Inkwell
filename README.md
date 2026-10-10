@@ -11,6 +11,26 @@ It also keeps the core Wordsmith flow: chat header picker (including /tell with 
 toggle, automatic chunking at 500 bytes with `(#c/#m)` continuation markers, one-click "copy next
 chunk", and click-a-word to see suggestions or add it to your dictionary.
 
+## Install (for players)
+
+Copy this custom repository URL:
+
+```
+https://raw.githubusercontent.com/Wyse2011/Inkwell/main/repo.json
+```
+
+1. In game, type `/xlsettings` and open the **Experimental** tab.
+2. Under **Custom Plugin Repositories**, paste the URL into the empty box, click the **+**
+   button, make sure the checkbox next to it is ticked, then click **Save and Close**.
+3. Type `/xlplugins`, search for **Inkwell**, and click **Install**.
+4. Type `/inkwell` to open the scratch pad, or `/inkwell config` for settings.
+
+Inkwell is a third-party plugin and is not affiliated with or reviewed by the Dalamud team.
+
+---
+
+# Building from source (for developers)
+
 ## Requirements
 
 - XIVLauncher with Dalamud, and the game launched at least once with Dalamud enabled
@@ -50,6 +70,28 @@ The DLL ends up in `Inkwell/bin/x64/Debug/Inkwell.dll` (the exact path is printe
 3. Type `/inkwell` to open the scratch pad, `/inkwell config` for settings.
 
 After rebuilding, disable and re-enable the plugin in `/xlplugins` to reload it.
+
+## 4. Publish a release (makes the custom repository work)
+
+The repository URL above reads `repo.json`, which points Dalamud at a file named `latest.zip`
+attached to the newest GitHub release. Until a release exists, the plugin will show up in
+`/xlplugins` but fail to install.
+
+1. Make sure `Inkwell/Dictionary/en_US.txt` exists on your machine so it gets packed into the zip.
+2. Build in Release mode:
+   ```
+   cd Inkwell
+   dotnet build -c Release
+   ```
+   The SDK's packager creates `Inkwell/bin/x64/Release/Inkwell/latest.zip` (the build output
+   shows the exact path).
+3. On GitHub, go to **Releases > Draft a new release**, create a tag such as `v0.1.0`, attach
+   `latest.zip` (keep that exact file name), and click **Publish release**.
+
+To ship an update: bump `<Version>` in `Inkwell.csproj` and `AssemblyVersion` in `repo.json`
+to the same new number, commit, build in Release, and publish a new release with the new
+`latest.zip`. Dalamud compares those version numbers to decide when to offer an update. If you
+move to a newer Dalamud SDK, update `DalamudApiLevel` in `repo.json` to match.
 
 ## If it doesn't compile
 

@@ -5,7 +5,7 @@
   <PropertyGroup>
     <Version>0.1.0.0</Version>
     <Description>Roleplay scratch pad with a resizable editor and inline spell-check highlighting.</Description>
-    <PackageProjectUrl>https://github.com/YOUR_NAME/Inkwell</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/Wyse2011/Inkwell</PackageProjectUrl>
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
