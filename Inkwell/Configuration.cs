@@ -25,6 +25,7 @@ public class Configuration : IPluginConfiguration
     public bool MarkerOnLastChunk = true;
     public bool SplitOnSentences = true;
     public bool ClearAfterLastCopy = false;
+    public bool ConfirmSendWithErrors = true;
 
     // ---- Spell check ----
     public string DictionaryFile = "en_US.txt";

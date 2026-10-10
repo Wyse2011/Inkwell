@@ -55,9 +55,13 @@ public static class Theme
         new("check", "Checkmark", "Toolbar", ThemeScope.Window, new[] { ImGuiCol.CheckMark }),
         new("list.highlight", "Dropdown highlight", "Toolbar", ThemeScope.Window,
             new[] { ImGuiCol.Header, ImGuiCol.HeaderHovered, ImGuiCol.HeaderActive }),
-        new("copy.warn", "Copy button (spelling errors)", "Toolbar", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
+        new("send", "Send to chat button", "Toolbar", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
+            new Vector4(0.2f, 0.4f, 0.7f, 1f)),
+        new("send.hover", "Send to chat button (hovered)", "Toolbar", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
+            new Vector4(0.27f, 0.5f, 0.85f, 1f)),
+        new("copy.warn", "Copy / Send buttons (spelling errors)", "Toolbar", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
             new Vector4(0.55f, 0.2f, 0.2f, 1f)),
-        new("copy.warn.hover", "Copy button (errors, hovered)", "Toolbar", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
+        new("copy.warn.hover", "Copy / Send buttons (errors, hovered)", "Toolbar", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
             new Vector4(0.7f, 0.25f, 0.25f, 1f)),
 
         // ---- Preview panel ----

@@ -11,6 +11,11 @@ It also keeps the core Wordsmith flow: chat header picker (including /tell with 
 toggle, automatic chunking at 500 bytes with `(#c/#m)` continuation markers, one-click "copy next
 chunk", and click-a-word to see suggestions or add it to your dictionary.
 
+**Send to chat:** the **Send to chat** button (top right, next to Copy) posts the next chunk
+straight into chat. One click sends one chunk; Copy and Send share the same counter, so they
+always point at the same chunk. Text is run through the game's own chat filter and the 500-byte
+limit before sending, and nothing is ever sent without a click.
+
 **Custom colors:** `/inkwell config` → **Appearance** lets you recolor the title bar, window
 background, toolbar, preview panel, text box, resize bar and status text, each with its own
 transparency.

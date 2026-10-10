@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
+using Inkwell.Chat;
 using Inkwell.Spelling;
 using Inkwell.Text;
 
@@ -25,7 +26,15 @@ public sealed class ScratchPadWindow : Window
 
     private List<string> chunks = new();
     private string chunkKey = string.Empty;
-    private int copyIndex;
+    /// <summary>Which chunk Copy and Send act on next. Shared, so both buttons stay in sync.</summary>
+    private int nextChunk;
+
+    private DateTime lastSend = DateTime.MinValue;
+    private DateTime confirmSendUntil = DateTime.MinValue;
+    private bool sending;
+    private string statusText = string.Empty;
+    private bool statusIsError;
+    private DateTime statusUntil = DateTime.MinValue;
 
     private Misspelling selected;
     private List<string> suggestions = new();
@@ -36,7 +45,11 @@ public sealed class ScratchPadWindow : Window
         this.plugin = plugin;
         config = plugin.Configuration;
         editor = new SpellTextEditor(plugin.Spell, config);
-        editor.TextChanged += () => copyIndex = 0;
+        editor.TextChanged += () =>
+        {
+            nextChunk = 0;
+            confirmSendUntil = DateTime.MinValue;
+        };
 
         SizeConstraints = new WindowSizeConstraints
         {
@@ -68,6 +81,7 @@ public sealed class ScratchPadWindow : Window
     {
         RebuildChunksIfNeeded();
         DrawToolbar();
+        DrawStatus();
         DrawSpellBar();
 
         var avail = ImGui.GetContentRegionAvail();
@@ -123,43 +137,159 @@ public sealed class ScratchPadWindow : Window
             config.Save();
 
         ImGui.SameLine();
-        DrawCopyButton();
-
-        ImGui.SameLine();
         if (ImGui.Button("Clear"))
             editor.SetText(string.Empty);
 
         ImGui.SameLine();
         if (ImGui.Button("Settings"))
             plugin.ConfigWindow.Toggle();
+
+        DrawChunkButtons();
     }
 
-    private void DrawCopyButton()
+    // ------------------------------------------------------------------ copy / send
+
+    private void DrawChunkButtons()
     {
+        if (nextChunk >= chunks.Count) nextChunk = 0;
+
         var hasChunks = chunks.Count > 0;
-        if (copyIndex >= chunks.Count) copyIndex = 0;
+        var counter = hasChunks ? $" {nextChunk + 1}/{chunks.Count}" : "";
+        var errors = editor.Misspellings.Count;
+        var warn = errors > 0;
+        var confirming = DateTime.Now < confirmSendUntil;
 
-        var label = hasChunks ? $"Copy {copyIndex + 1}/{chunks.Count}###copy" : "Copy###copy";
-        var warn = editor.Misspellings.Count > 0;
+        var copyLabel = $"Copy{counter}###copy";
+        var sendLabel = (confirming ? "Send anyway?" : "Send to chat") + $"{counter}###send";
 
+        // Right-align both buttons on the toolbar row. If the window is too narrow they simply
+        // follow the other controls.
+        var style = ImGui.GetStyle();
+        var copyWidth = ImGui.CalcTextSize(copyLabel.Split("###")[0]).X + style.FramePadding.X * 2;
+        var sendWidth = ImGui.CalcTextSize(sendLabel.Split("###")[0]).X + style.FramePadding.X * 2;
+        var total = copyWidth + style.ItemSpacing.X + sendWidth;
+
+        ImGui.SameLine();
+        var free = ImGui.GetContentRegionAvail().X;
+        if (free > total)
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + free - total);
+
+        // ---- Copy ----
         using (ImRaii.Disabled(!hasChunks))
         using (ImRaii.PushColor(ImGuiCol.Button, Theme.Accent(config, "copy.warn"), warn))
         using (ImRaii.PushColor(ImGuiCol.ButtonHovered, Theme.Accent(config, "copy.warn.hover"), warn))
         {
-            if (ImGui.Button(label))
+            if (ImGui.Button(copyLabel))
             {
-                ImGui.SetClipboardText(chunks[copyIndex]);
-                copyIndex++;
-                if (copyIndex >= chunks.Count)
-                {
-                    copyIndex = 0;
-                    if (config.ClearAfterLastCopy) editor.SetText(string.Empty);
-                }
+                ImGui.SetClipboardText(chunks[nextChunk]);
+                SetStatus($"Copied chunk {nextChunk + 1}/{chunks.Count} to the clipboard.", false);
+                AdvanceChunk();
             }
         }
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(warn
+                ? $"{errors} possible spelling error(s). You can still copy."
+                : "Copy the next chunk to your clipboard.");
 
-        if (warn && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip($"{editor.Misspellings.Count} possible spelling error(s). You can still copy.");
+        // ---- Send ----
+        ImGui.SameLine();
+        var cooling = (DateTime.Now - lastSend).TotalSeconds < 1.0;
+        var sendColor = warn ? Theme.Accent(config, "copy.warn") : Theme.Accent(config, "send");
+        var sendHover = warn ? Theme.Accent(config, "copy.warn.hover") : Theme.Accent(config, "send.hover");
+
+        using (ImRaii.Disabled(!hasChunks || sending || cooling))
+        using (ImRaii.PushColor(ImGuiCol.Button, sendColor))
+        using (ImRaii.PushColor(ImGuiCol.ButtonHovered, sendHover))
+        {
+            if (ImGui.Button(sendLabel))
+                OnSendClicked(warn, confirming);
+        }
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip(warn
+                ? $"{errors} possible spelling error(s).\nSends the next chunk to chat. One click = one message."
+                : "Sends the next chunk to chat. One click = one message.");
+    }
+
+    private void OnSendClicked(bool hasErrors, bool confirming)
+    {
+        if (hasErrors && config.ConfirmSendWithErrors && !confirming)
+        {
+            confirmSendUntil = DateTime.Now.AddSeconds(3);
+            SetStatus("There are spelling errors. Click \"Send anyway?\" within 3 seconds to send.", true);
+            return;
+        }
+        confirmSendUntil = DateTime.MinValue;
+
+        if (!Plugin.ClientState.IsLoggedIn)
+        {
+            SetStatus("You need to be logged in to a character to send chat.", true);
+            return;
+        }
+
+        var index = nextChunk;
+        var total = chunks.Count;
+        var message = chunks[index];
+
+        // With no channel header, a chunk starting with "/" would be run by the game as a command.
+        if (string.IsNullOrWhiteSpace(ChatHeaders.Resolve(config)) && message.TrimStart().StartsWith('/'))
+        {
+            SetStatus("This chunk starts with \"/\", which the game would run as a command. Pick a chat channel first.", true);
+            return;
+        }
+
+        sending = true;
+        lastSend = DateTime.Now;
+        var expectedText = editor.Text;
+
+        Plugin.Framework.RunOnFrameworkThread(() =>
+        {
+            string? error;
+            try
+            {
+                error = ChatSender.TrySend(message);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.Error(ex, "Inkwell: failed to send chat message");
+                error = "Something went wrong sending the message. Check /xllog for details.";
+            }
+
+            sending = false;
+            if (error != null)
+            {
+                SetStatus(error, true);
+                return;
+            }
+
+            SetStatus($"Sent chunk {index + 1}/{total}.", false);
+            // Only advance if the text didn't change while we were sending.
+            if (editor.Text == expectedText && nextChunk == index)
+                AdvanceChunk();
+        });
+    }
+
+    /// <summary>Moves both buttons to the next chunk; wraps (and optionally clears) after the last.</summary>
+    private void AdvanceChunk()
+    {
+        nextChunk++;
+        if (nextChunk < chunks.Count) return;
+
+        nextChunk = 0;
+        if (config.ClearAfterLastCopy)
+            editor.SetText(string.Empty);
+    }
+
+    private void SetStatus(string text, bool isError)
+    {
+        statusText = text;
+        statusIsError = isError;
+        statusUntil = DateTime.Now.AddSeconds(isError ? 6 : 3);
+    }
+
+    private void DrawStatus()
+    {
+        if (DateTime.Now > statusUntil || statusText.Length == 0) return;
+        ImGui.TextColored(statusIsError ? Yellow : Green, statusText);
     }
 
     // ------------------------------------------------------------------ spell bar
@@ -262,7 +392,7 @@ public sealed class ScratchPadWindow : Window
 
         chunkKey = key;
         chunks = Chunker.Build(editor.Text, header, config.Ooc, config);
-        if (copyIndex >= chunks.Count) copyIndex = 0;
+        if (nextChunk >= chunks.Count) nextChunk = 0;
     }
 
     private void DrawPreview(Vector2 size)
@@ -278,8 +408,8 @@ public sealed class ScratchPadWindow : Window
 
         for (int i = 0; i < chunks.Count; i++)
         {
-            var label = i == copyIndex ? $"Chunk {i + 1} (next to copy)" : $"Chunk {i + 1}";
-            ImGui.TextColored(i == copyIndex ? Theme.Accent(config, "preview.next") : Dim, label);
+            var label = i == nextChunk ? $"Chunk {i + 1} (next)" : $"Chunk {i + 1}";
+            ImGui.TextColored(i == nextChunk ? Theme.Accent(config, "preview.next") : Dim, label);
             DrawFlowText(chunks[i]);
             if (i < chunks.Count - 1) ImGui.Separator();
         }

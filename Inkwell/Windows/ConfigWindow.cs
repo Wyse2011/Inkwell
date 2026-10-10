@@ -68,7 +68,8 @@ public sealed class ConfigWindow : Window
             ImGui.TextDisabled("#c = chunk number, #m = total chunks. Leave blank for none.");
             changed |= ImGui.Checkbox("Put marker on the last chunk too", ref config.MarkerOnLastChunk);
             changed |= ImGui.Checkbox("Prefer splitting at the end of a sentence", ref config.SplitOnSentences);
-            changed |= ImGui.Checkbox("Clear text after the last chunk is copied", ref config.ClearAfterLastCopy);
+            changed |= ImGui.Checkbox("Clear text after the last chunk is copied or sent", ref config.ClearAfterLastCopy);
+            changed |= ImGui.Checkbox("Ask before sending to chat when there are spelling errors", ref config.ConfirmSendWithErrors);
         }
 
         DrawAppearance();
