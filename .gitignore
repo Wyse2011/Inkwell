@@ -1,1 +1,10 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.idea/
+*.suo
 
+# The dictionary IS committed: the official Dalamud repo builds from source,
+# so the word list has to be in the repository.
