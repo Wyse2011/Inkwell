@@ -1,0 +1,20 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <!-- Dalamud.NET.Sdk sets the target framework, references Dalamud, ImGui bindings, etc.
+       If your installed Dalamud is on a different API level, change the SDK version to match
+       (e.g. 14.0.2). The build error will tell you if they disagree. -->
+  <PropertyGroup>
+    <Version>0.4.0.0</Version>
+    <Description>Roleplay scratch pad with a resizable editor and inline spell-check highlighting.</Description>
+    <PackageProjectUrl>https://github.com/Wyse2011/Inkwell</PackageProjectUrl>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <!-- Required by the official Dalamud plugin repository: pins exact package versions. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Ships the word list next to the DLL. See README for where to get one. -->
+    <Content Include="Dictionary\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
