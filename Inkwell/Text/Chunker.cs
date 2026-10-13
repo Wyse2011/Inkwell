@@ -32,11 +32,11 @@ public static class ChatHeaders
         return list.ToArray();
     }
 
-    public static string Resolve(Configuration cfg)
+    public static string Resolve(int headerIndex, string tellTarget)
     {
-        var idx = Math.Clamp(cfg.HeaderIndex, 0, All.Length - 1);
+        var idx = Math.Clamp(headerIndex, 0, All.Length - 1);
         if (idx == TellIndex)
-            return string.IsNullOrWhiteSpace(cfg.TellTarget) ? "/t" : $"/t {cfg.TellTarget.Trim()}";
+            return string.IsNullOrWhiteSpace(tellTarget) ? "/t" : $"/t {tellTarget.Trim()}";
         return All[idx].Command;
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Configuration;
+using Inkwell.Pads;
 
 namespace Inkwell;
 
@@ -10,11 +11,13 @@ public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
 
-    // ---- Layout ----
-    /// <summary>Height of the bottom editor in pixels. Changed by dragging the splitter.</summary>
-    public float EditorHeight = 180f;
+    // ---- Scratch pads ----
+    /// <summary>All open pads, in tab order. Each has its own text, channel and settings.</summary>
+    public List<PadData> Pads = new();
+    public int NextPadId = 1;
 
-    // ---- Chat header ----
+    // ---- Pre-tabs settings (v0.3 and earlier). Only read once, to build the first pad. ----
+    public float EditorHeight = 180f;
     public int HeaderIndex = 0;
     public string TellTarget = string.Empty;
     public bool Ooc = false;

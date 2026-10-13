@@ -4,6 +4,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Inkwell.Pads;
 using Inkwell.Spelling;
 using Inkwell.Windows;
 
@@ -22,7 +23,8 @@ public sealed class Plugin : IDalamudPlugin
     public Configuration Configuration { get; }
     public SpellChecker Spell { get; }
     public WindowSystem WindowSystem { get; } = new("Inkwell");
-    public ScratchPadWindow ScratchPad { get; }
+    public MainWindow MainWindow { get; }
+    public PadManager Pads { get; }
     public ConfigWindow ConfigWindow { get; }
 
     public Plugin()
@@ -31,18 +33,19 @@ public sealed class Plugin : IDalamudPlugin
         Spell = new SpellChecker(Configuration);
         LoadDictionary();
 
-        ScratchPad = new ScratchPadWindow(this);
+        MainWindow = new MainWindow(this);
         ConfigWindow = new ConfigWindow(this);
-        WindowSystem.AddWindow(ScratchPad);
+        WindowSystem.AddWindow(MainWindow);
         WindowSystem.AddWindow(ConfigWindow);
+        Pads = new PadManager(this, WindowSystem);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open the Inkwell scratch pad. \"/inkwell config\" opens settings.",
+            HelpMessage = "Open Inkwell. \"/inkwell new\" adds a pad, \"/inkwell config\" opens settings.",
         });
 
-        PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenMainUi += ScratchPad.Toggle;
+        PluginInterface.UiBuilder.Draw += DrawUi;
+        PluginInterface.UiBuilder.OpenMainUi += MainWindow.Toggle;
         PluginInterface.UiBuilder.OpenConfigUi += ConfigWindow.Toggle;
     }
 
@@ -70,18 +73,34 @@ public sealed class Plugin : IDalamudPlugin
         Log.Warning($"Inkwell: no dictionary found. Looked in: {string.Join(", ", candidates)}");
     }
 
+    private void DrawUi()
+    {
+        Pads.Update();          // Apply queued tab/window changes before anything draws.
+        WindowSystem.Draw();
+    }
+
     private void OnCommand(string command, string args)
     {
-        if (args.Trim().Equals("config", System.StringComparison.OrdinalIgnoreCase))
-            ConfigWindow.Toggle();
-        else
-            ScratchPad.Toggle();
+        switch (args.Trim().ToLowerInvariant())
+        {
+            case "config":
+                ConfigWindow.Toggle();
+                break;
+            case "new":
+                Pads.NewPad();
+                MainWindow.IsOpen = true;
+                break;
+            default:
+                MainWindow.Toggle();
+                break;
+        }
     }
 
     public void Dispose()
     {
-        PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
-        PluginInterface.UiBuilder.OpenMainUi -= ScratchPad.Toggle;
+        PluginInterface.UiBuilder.Draw -= DrawUi;
+        PluginInterface.UiBuilder.OpenMainUi -= MainWindow.Toggle;
+        Pads.Dispose();
         PluginInterface.UiBuilder.OpenConfigUi -= ConfigWindow.Toggle;
         WindowSystem.RemoveAllWindows();
         CommandManager.RemoveHandler(CommandName);

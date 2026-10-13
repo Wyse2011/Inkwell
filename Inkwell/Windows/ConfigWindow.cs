@@ -77,7 +77,7 @@ public sealed class ConfigWindow : Window
         if (changed)
         {
             config.Save();
-            plugin.ScratchPad.OnSettingsChanged();
+            plugin.Pads.NotifySettingsChanged();
         }
     }
 

@@ -25,6 +25,10 @@ own and should be reported here, not to Wordsmith.
 
 Quality-of-life changes on top of the Wordsmith-style workflow:
 
+- **Tabs and pop-out windows.** Keep several pads open as tabs (click **+** to add one), and
+  pop any pad out into its own window so you can see several at once. Each pad has its own
+  text, chat channel, /tell target, OOC setting and chunk counter. Closing a popped-out window
+  puts the pad back in the tabs instead of deleting it, and all pads are saved between sessions.
 - **Resizable text box.** Drag the bar between the chunk preview and the text box to make the
   editor as large as you like. The size is remembered between sessions.
 - **Misspellings highlighted where you type.** Misspelled words are marked directly in the
@@ -51,8 +55,8 @@ Quality-of-life changes on top of the Wordsmith-style workflow:
 
 ### Wordsmith features Inkwell doesn't have (yet)
 
-To be upfront: Wordsmith still does more in some areas. Inkwell currently has a single scratch
-pad, no thesaurus, and no custom chat aliases. If you rely on those, Wordsmith is the better
+To be upfront: Wordsmith still does more in some areas. Inkwell currently has no thesaurus and
+no custom chat aliases. If you rely on those, Wordsmith is the better
 choice for now.
 
 ## Install (for players)
@@ -67,7 +71,8 @@ https://raw.githubusercontent.com/Wyse2011/Inkwell/main/repo.json
 2. Under **Custom Plugin Repositories**, paste the URL into the empty box, click the **+**
    button, make sure the checkbox next to it is ticked, then click **Save and Close**.
 3. Type `/xlplugins`, search for **Inkwell**, and click **Install**.
-4. Type `/inkwell` to open the scratch pad, or `/inkwell config` for settings.
+4. Type `/inkwell` to open Inkwell, `/inkwell new` to add a pad, or `/inkwell config` for
+   settings.
 
 Inkwell is a third-party plugin and is not affiliated with Square Enix, Wordsmith or
 MythicPalette.
@@ -162,7 +167,6 @@ ImGui can't color individual words inside a text box, so Inkwell draws over it:
 
 - Right-click a highlighted word in the editor itself to get suggestions.
 - Custom chat aliases (e.g. `/friendo` for a frequent /tell target).
-- Multiple scratch pads.
 - Typing `/p` or `/em` at the start of the text to switch the header automatically.
 
 ## Acknowledgements
