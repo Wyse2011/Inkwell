@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Inkwell.Windows;
 
@@ -85,13 +86,14 @@ public sealed class PadManager : IDisposable
         QueueSave();
     });
 
-    public void Detach(int id) => pending.Enqueue(() =>
+    /// <param name="at">Screen position for the new window (e.g. where a dragged tab was dropped).</param>
+    public void Detach(int id, Vector2? at = null) => pending.Enqueue(() =>
     {
         var pad = Find(id);
         if (pad == null || pad.Detached) return;
 
         pad.Detached = true;
-        OpenWindow(pad);
+        OpenWindow(pad, at);
         QueueSave();
     });
 
@@ -172,10 +174,11 @@ public sealed class PadManager : IDisposable
         }
     }
 
-    private void OpenWindow(PadData pad)
+    private void OpenWindow(PadData pad, Vector2? at = null)
     {
         if (windows.ContainsKey(pad.Id)) return;
         var window = new PadWindow(plugin, this, views[pad.Id]) { IsOpen = true };
+        if (at != null) window.PlaceAt(at.Value);
         windows[pad.Id] = window;
         windowSystem.AddWindow(window);
     }

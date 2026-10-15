@@ -18,4 +18,11 @@ public class PadData
     public bool Detached;
 
     public float EditorHeight = 180f;
+
+    /// <summary>
+    /// Set when a typed command (like "/p ") switched the channel for one post. The channel goes
+    /// back to this once the post is finished. Null when no temporary switch is active.
+    /// </summary>
+    public int? RevertHeaderIndex;
+    public string RevertTellTarget = string.Empty;
 }

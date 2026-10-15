@@ -59,6 +59,23 @@ public sealed class ConfigWindow : Window
             }
         }
 
+        if (ImGui.CollapsingHeader("Channel colors", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            changed |= ImGui.Checkbox("Tint the text box and preview with the channel's color", ref config.ChannelTintBackground);
+            using (ImRaii.Disabled(!config.ChannelTintBackground))
+            {
+                ImGui.SetNextItemWidth(200);
+                var percent = config.ChannelTintStrength * 100f;
+                if (ImGui.SliderFloat("Tint strength", ref percent, 5f, 60f, "%.0f%%"))
+                {
+                    config.ChannelTintStrength = percent / 100f;
+                    changed = true;
+                }
+            }
+            changed |= ImGui.Checkbox("Color the text with the channel's color (like the game's chat log)", ref config.ChannelColorText);
+            ImGui.TextDisabled("Change each channel's color under Appearance > Chat channel colors.");
+        }
+
         if (ImGui.CollapsingHeader("Chunks", ImGuiTreeNodeFlags.DefaultOpen))
         {
             ImGui.SetNextItemWidth(200);
@@ -70,6 +87,10 @@ public sealed class ConfigWindow : Window
             changed |= ImGui.Checkbox("Prefer splitting at the end of a sentence", ref config.SplitOnSentences);
             changed |= ImGui.Checkbox("Clear text after the last chunk is copied or sent", ref config.ClearAfterLastCopy);
             changed |= ImGui.Checkbox("Ask before sending to chat when there are spelling errors", ref config.ConfirmSendWithErrors);
+            changed |= ImGui.Checkbox("Typing /em, /p, /t Name@World etc. at the start switches the channel", ref config.ChatCommandsSwitchChannel);
+            ImGui.TextDisabled("The command is removed from your text, so it never shows up in chat.");
+            using (ImRaii.Disabled(!config.ChatCommandsSwitchChannel))
+                changed |= ImGui.Checkbox("Go back to the previous channel when that post is finished", ref config.ChatCommandsTemporary);
         }
 
         DrawAppearance();

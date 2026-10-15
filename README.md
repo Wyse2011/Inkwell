@@ -26,9 +26,19 @@ own and should be reported here, not to Wordsmith.
 Quality-of-life changes on top of the Wordsmith-style workflow:
 
 - **Tabs and pop-out windows.** Keep several pads open as tabs (click **+** to add one), and
-  pop any pad out into its own window so you can see several at once. Each pad has its own
+  pop any pad out into its own window so you can see several at once. Drag a tab away from
+  the tab row to tear it off into a window, and drag a window by its title bar back over the
+  main Inkwell window to turn it into a tab again. Each pad has its own
   text, chat channel, /tell target, OOC setting and chunk counter. Closing a popped-out window
   puts the pad back in the tabs instead of deleting it, and all pads are saved between sessions.
+- **Type chat commands to switch channels.** Start a pad with `/em `, `/p `, `/fc `, `/l1 `,
+  `/t Name Surname@World ` and so on, and Inkwell switches that pad's channel and removes the
+  command from your text, so it never shows up in the post itself. The switch only lasts for
+  that post: once it's sent, copied or cleared, the pad goes back to its previous channel.
+- **Color-coded channels like the game's chat log.** Channel names in the dropdown are shown in
+  their chat colors (Party blue, Tell pink, Emote teal and so on, using FFXIV's defaults). You can
+  optionally tint the text box or color your text by channel too, and every channel's color is
+  adjustable in Appearance.
 - **Resizable text box.** Drag the bar between the chunk preview and the text box to make the
   editor as large as you like. The size is remembered between sessions.
 - **Misspellings highlighted where you type.** Misspelled words are marked directly in the
@@ -167,7 +177,6 @@ ImGui can't color individual words inside a text box, so Inkwell draws over it:
 
 - Right-click a highlighted word in the editor itself to get suggestions.
 - Custom chat aliases (e.g. `/friendo` for a frequent /tell target).
-- Typing `/p` or `/em` at the start of the text to switch the header automatically.
 
 ## Acknowledgements
 

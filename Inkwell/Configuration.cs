@@ -29,6 +29,13 @@ public class Configuration : IPluginConfiguration
     public bool SplitOnSentences = true;
     public bool ClearAfterLastCopy = false;
     public bool ConfirmSendWithErrors = true;
+    public bool ChatCommandsSwitchChannel = true;
+    public bool ChatCommandsTemporary = true;
+
+    // ---- Channel colors ----
+    public bool ChannelTintBackground = false;
+    public float ChannelTintStrength = 0.15f;
+    public bool ChannelColorText = false;
 
     // ---- Spell check ----
     public string DictionaryFile = "en_US.txt";

@@ -24,6 +24,15 @@ public sealed class MainWindow : Window
     private int closeId;
     private string closeName = string.Empty;
 
+    // Tab tear-off state.
+    private int? tabDragId;
+    private string tabDragName = string.Empty;
+    private Vector2 tabRowMin, tabRowMax;
+
+    // Where this window was last drawn, so popped-out pads know where to drop.
+    private Vector2 windowMin, windowMax;
+    private int lastDrawFrame = -10;
+
     public MainWindow(Plugin plugin) : base("Inkwell###inkwell-main")
     {
         this.plugin = plugin;
@@ -48,6 +57,12 @@ public sealed class MainWindow : Window
         var docked = Pads.Pads.Where(p => !p.Detached).ToList();
         var select = Pads.SelectRequest;
 
+        windowMin = ImGui.GetWindowPos();
+        windowMax = windowMin + ImGui.GetWindowSize();
+        lastDrawFrame = ImGui.GetFrameCount();
+        tabRowMin = ImGui.GetCursorScreenPos();
+        tabRowMax = new Vector2(windowMax.X, tabRowMin.Y + ImGui.GetFrameHeight());
+
         using (var tabBar = ImRaii.TabBar("##inkwell-pads", ImGuiTabBarFlags.Reorderable))
         {
             if (tabBar)
@@ -63,6 +78,8 @@ public sealed class MainWindow : Window
         }
 
         if (select != null) Pads.SelectRequest = null;
+
+        HandleTabTearOff();
 
         if (docked.Count == 0)
         {
@@ -96,6 +113,13 @@ public sealed class MainWindow : Window
 
         var visible = ImGui.BeginTabItem($"{pad.Name}###inkwell-tab-{pad.Id}", ref open, flags);
 
+        // Remember which tab is being dragged; HandleTabTearOff decides what happens on release.
+        if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
+        {
+            tabDragId = pad.Id;
+            tabDragName = pad.Name;
+        }
+
         // Double-click a tab to rename it.
         if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
             StartRename(pad);
@@ -119,6 +143,68 @@ public sealed class MainWindow : Window
 
         if (!open)
             RequestClose(pad);
+    }
+
+    // ------------------------------------------------------------------ drag and drop
+
+    /// <summary>Dragging a tab well away from the tab row and releasing pops it out there.</summary>
+    private void HandleTabTearOff()
+    {
+        if (tabDragId is not int id) return;
+
+        var mouse = ImGui.GetMousePos();
+        var tornOff = IsAwayFromTabRow(mouse);
+
+        if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+        {
+            if (tornOff)
+                DrawLabel(mouse + new Vector2(14, 14), $"Release to pop out \"{tabDragName}\"");
+            return;
+        }
+
+        if (tornOff)
+            Pads.Detach(id, mouse - new Vector2(40, 10));
+        tabDragId = null;
+    }
+
+    private bool IsAwayFromTabRow(Vector2 mouse)
+    {
+        var margin = ImGui.GetFrameHeight() * 1.5f;
+        return mouse.Y > tabRowMax.Y + margin || mouse.Y < tabRowMin.Y - margin
+            || mouse.X < windowMin.X - margin || mouse.X > windowMax.X + margin;
+    }
+
+    /// <summary>True if a popped-out pad released at <paramref name="mouse"/> should dock here.</summary>
+    public bool IsDropTarget(Vector2 mouse)
+    {
+        if (!IsOpen || ImGui.GetFrameCount() - lastDrawFrame > 1) return false;
+        return mouse.X >= windowMin.X && mouse.X <= windowMax.X
+            && mouse.Y >= windowMin.Y && mouse.Y <= windowMax.Y;
+    }
+
+    /// <summary>Highlights this window while a popped-out pad is dragged over it.</summary>
+    public void DrawDropHint(string padName)
+    {
+        var drawList = ImGui.GetForegroundDrawList();
+        var accent = Theme.Accent(config, "splitter.hover");
+
+        drawList.AddRectFilled(windowMin, windowMax, ImGui.GetColorU32(accent with { W = 0.18f }), 6f);
+        drawList.AddRect(windowMin, windowMax, ImGui.GetColorU32(accent), 6f, ImDrawFlags.None, 3f);
+
+        var text = $"Release to dock \"{padName}\" as a tab";
+        var center = (windowMin + windowMax) / 2f;
+        DrawLabel(center - ImGui.CalcTextSize(text) / 2f, text);
+    }
+
+    private static void DrawLabel(Vector2 pos, string text)
+    {
+        var drawList = ImGui.GetForegroundDrawList();
+        var pad = new Vector2(8, 5);
+        var size = ImGui.CalcTextSize(text) + pad * 2;
+
+        drawList.AddRectFilled(pos, pos + size, ImGui.GetColorU32(ImGuiCol.PopupBg), 4f);
+        drawList.AddRect(pos, pos + size, ImGui.GetColorU32(ImGuiCol.Border), 4f);
+        drawList.AddText(pos + pad, ImGui.GetColorU32(ImGuiCol.Text), text);
     }
 
     private void StartRename(PadData pad)

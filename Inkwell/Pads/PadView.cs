@@ -34,6 +34,7 @@ public sealed class PadView
     private int nextChunk;
 
     private DateTime lastSend = DateTime.MinValue;
+    private bool postStartedAfterSwitch;
     private DateTime confirmSendUntil = DateTime.MinValue;
     private bool sending;
     private string statusText = string.Empty;
@@ -59,6 +60,15 @@ public sealed class PadView
             confirmSendUntil = DateTime.MinValue;
             pad.Text = editor.Text;
             manager.QueueSave();
+            var switched = CheckForChatCommand();
+
+            // Deleting everything you wrote after a "/p " switch counts as finishing the post.
+            // (Skipped while the command itself is still being removed from the box.)
+            if (!switched && pad.RevertHeaderIndex != null)
+            {
+                if (editor.Text.Length > 0) postStartedAfterSwitch = true;
+                else if (postStartedAfterSwitch) RevertTemporaryChannel();
+            }
         };
     }
 
@@ -95,11 +105,13 @@ public sealed class PadView
         var previewHeight = MathF.Max(MinPreviewHeight, avail.Y - editorHeight - SplitterHeight - spacing * 2);
 
         using (Theme.Push(config, ThemeScope.Preview))
+        using (PushChannelColors(ImGuiCol.ChildBg))
             DrawPreview(new Vector2(0, previewHeight));
 
         DrawSplitter(avail.X, editorHeight, maxEditor);
 
         using (Theme.Push(config, ThemeScope.Editor))
+        using (PushChannelColors(ImGuiCol.FrameBg, ImGuiCol.ChildBg))
             editor.Draw(new Vector2(0, editorHeight));
     }
 
@@ -111,19 +123,34 @@ public sealed class PadView
         var idx = Math.Clamp(pad.HeaderIndex, 0, headers.Length - 1);
 
         ImGui.SetNextItemWidth(150);
-        using (var combo = ImRaii.Combo("##header", headers[idx].Name))
+        var temporary = pad.RevertHeaderIndex != null;
+        var preview = temporary ? $"{headers[idx].Name} (this post)" : headers[idx].Name;
+
+        using (ImRaii.PushColor(ImGuiCol.Text, ChannelColor(idx) ?? Vector4.Zero, ChannelColor(idx) != null))
+        using (var combo = ImRaii.Combo("##header", preview))
         {
             if (combo)
             {
                 for (int i = 0; i < headers.Length; i++)
                 {
-                    if (ImGui.Selectable(headers[i].Name, i == idx))
+                    var color = ChannelColor(i);
+                    using (ImRaii.PushColor(ImGuiCol.Text, color ?? Vector4.Zero, color != null))
                     {
-                        pad.HeaderIndex = i;
-                        manager.QueueSave();
+                        if (ImGui.Selectable(headers[i].Name, i == idx))
+                        {
+                            pad.HeaderIndex = i;
+                            pad.RevertHeaderIndex = null;   // A manual pick is the new normal.
+                            manager.QueueSave();
+                        }
                     }
                 }
             }
+        }
+        if (temporary && ImGui.IsItemHovered())
+        {
+            var back = ChatHeaders.All[Math.Clamp(pad.RevertHeaderIndex!.Value, 0, headers.Length - 1)].Name;
+            ImGui.SetTooltip($"Switched by a typed command. Goes back to {back} when this post is finished.\n" +
+                             "Pick a channel here to keep it instead.");
         }
 
         if (pad.HeaderIndex == ChatHeaders.TellIndex)
@@ -140,7 +167,10 @@ public sealed class PadView
 
         ImGui.SameLine();
         if (ImGui.Button("Clear"))
+        {
             editor.SetText(string.Empty);
+            RevertTemporaryChannel();
+        }
 
         ImGui.SameLine();
         if (ImGui.Button("Settings"))
@@ -292,9 +322,94 @@ public sealed class PadView
         nextChunk++;
         if (nextChunk < chunks.Count) return;
 
+        // The whole post has gone out.
         nextChunk = 0;
         if (config.ClearAfterLastCopy)
             editor.SetText(string.Empty);
+        RevertTemporaryChannel();
+    }
+
+    /// <summary>Undo a "/p "-style switch once its post is finished.</summary>
+    private void RevertTemporaryChannel()
+    {
+        if (pad.RevertHeaderIndex is not int previous) return;
+
+        pad.HeaderIndex = previous;
+        pad.TellTarget = pad.RevertTellTarget;
+        pad.RevertHeaderIndex = null;
+        postStartedAfterSwitch = false;
+        manager.QueueSave();
+        SetStatus($"Channel back to {ChatHeaders.All[Math.Clamp(previous, 0, ChatHeaders.All.Length - 1)].Name}.", false);
+    }
+
+    /// <summary>The channel's color from Appearance, or null for "None".</summary>
+    private Vector4? ChannelColor(int headerIndex)
+    {
+        var key = ChatHeaders.All[Math.Clamp(headerIndex, 0, ChatHeaders.All.Length - 1)].ColorKey;
+        return key == null ? null : Theme.Accent(config, key);
+    }
+
+    /// <summary>
+    /// Tints the given background colors toward the pad's channel color (and optionally colors the
+    /// text), on top of whatever Appearance colors are already in effect.
+    /// </summary>
+    private ThemePush PushChannelColors(params ImGuiCol[] backgrounds)
+    {
+        var channel = ChannelColor(pad.HeaderIndex);
+        if (channel is not Vector4 c) return new ThemePush(0);
+
+        int count = 0;
+        if (config.ChannelTintBackground)
+        {
+            var t = Math.Clamp(config.ChannelTintStrength, 0f, 1f);
+            foreach (var target in backgrounds)
+            {
+                var bg = ImGui.ColorConvertU32ToFloat4(ImGui.GetColorU32(target));
+                var mixed = new Vector4(
+                    bg.X + (c.X - bg.X) * t,
+                    bg.Y + (c.Y - bg.Y) * t,
+                    bg.Z + (c.Z - bg.Z) * t,
+                    MathF.Max(bg.W, t));
+                ImGui.PushStyleColor(target, mixed);
+                count++;
+            }
+        }
+
+        if (config.ChannelColorText)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, c);
+            count++;
+        }
+
+        return new ThemePush(count);
+    }
+
+    /// <summary>"/em waves" becomes channel Emote + text "waves".</summary>
+    private bool CheckForChatCommand()
+    {
+        if (!config.ChatCommandsSwitchChannel) return false;
+        if (!ChatHeaders.TryParseCommand(editor.Text, out var headerIndex, out var tellTarget, out var length))
+            return false;
+
+        // Remember where to go back to (only the first time, so "/p " then "/fc " still returns
+        // to the original channel).
+        if (config.ChatCommandsTemporary && pad.RevertHeaderIndex == null && headerIndex != pad.HeaderIndex)
+        {
+            pad.RevertHeaderIndex = pad.HeaderIndex;
+            pad.RevertTellTarget = pad.TellTarget;
+        }
+        postStartedAfterSwitch = false;
+
+        pad.HeaderIndex = headerIndex;
+        if (tellTarget != null) pad.TellTarget = tellTarget;
+        editor.RemovePrefix(length);
+        manager.QueueSave();
+
+        var name = ChatHeaders.All[headerIndex].Name;
+        SetStatus(tellTarget != null
+            ? $"Channel switched to Tell ({tellTarget})."
+            : $"Channel switched to {name}.", false);
+        return true;
     }
 
     private void SetStatus(string text, bool isError)

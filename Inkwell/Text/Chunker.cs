@@ -5,11 +5,73 @@ using System.Text.RegularExpressions;
 
 namespace Inkwell.Text;
 
-public readonly record struct ChatHeader(string Name, string Command);
+/// <param name="ColorKey">Theme entry holding this channel's color, or null for no color.</param>
+public readonly record struct ChatHeader(string Name, string Command, string? ColorKey);
 
 public static class ChatHeaders
 {
     public const int TellIndex = 1;
+
+    // Commands typed at the start of the text, mapped to their entry in All.
+    private static readonly Dictionary<string, int> CommandAliases = BuildAliases();
+
+    // "/em " etc. The trailing whitespace means the command has been fully typed.
+    private static readonly Regex CommandRegex =
+        new(@"^\s*/([a-z0-9]+)\s+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    // "/t Name Surname@World " or "/t <t> ".
+    private static readonly Regex TellRegex = new(
+        @"^\s*/(?:t|tell)\s+(<[a-z0-9]+>|[\p{L}'\-]+\s+[\p{L}'\-]+(?:@[\p{L}]+)?)\s+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static Dictionary<string, int> BuildAliases()
+    {
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["s"] = 0, ["say"] = 0,
+            ["em"] = 2, ["emote"] = 2,
+            ["p"] = 3, ["party"] = 3,
+            ["fc"] = 4, ["freecompany"] = 4,
+            ["a"] = 5, ["alliance"] = 5,
+            ["y"] = 6, ["yell"] = 6,
+            ["sh"] = 7, ["shout"] = 7,
+        };
+        for (int i = 1; i <= 8; i++)
+        {
+            map[$"l{i}"] = 7 + i;
+            map[$"linkshell{i}"] = 7 + i;
+            map[$"cwl{i}"] = 15 + i;
+            map[$"cwlinkshell{i}"] = 15 + i;
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// If <paramref name="text"/> starts with a chat command like "/em " or "/t Name Surname@World ",
+    /// returns which channel it means and how many characters to remove from the text.
+    /// </summary>
+    public static bool TryParseCommand(string text, out int headerIndex, out string? tellTarget, out int length)
+    {
+        headerIndex = 0;
+        tellTarget = null;
+        length = 0;
+
+        var tell = TellRegex.Match(text);
+        if (tell.Success)
+        {
+            headerIndex = TellIndex;
+            tellTarget = Regex.Replace(tell.Groups[1].Value, @"\s+", " ");
+            length = tell.Length;
+            return true;
+        }
+
+        var m = CommandRegex.Match(text);
+        if (!m.Success || !CommandAliases.TryGetValue(m.Groups[1].Value, out headerIndex))
+            return false;
+
+        length = m.Length;
+        return true;
+    }
 
     public static readonly ChatHeader[] All = BuildList();
 
@@ -17,18 +79,18 @@ public static class ChatHeaders
     {
         var list = new List<ChatHeader>
         {
-            new("Say", "/s"),
-            new("Tell", "/t"),
-            new("Emote", "/em"),
-            new("Party", "/p"),
-            new("Free Company", "/fc"),
-            new("Alliance", "/a"),
-            new("Yell", "/y"),
-            new("Shout", "/sh"),
+            new("Say", "/s", "channel.say"),
+            new("Tell", "/t", "channel.tell"),
+            new("Emote", "/em", "channel.emote"),
+            new("Party", "/p", "channel.party"),
+            new("Free Company", "/fc", "channel.fc"),
+            new("Alliance", "/a", "channel.alliance"),
+            new("Yell", "/y", "channel.yell"),
+            new("Shout", "/sh", "channel.shout"),
         };
-        for (int i = 1; i <= 8; i++) list.Add(new($"Linkshell {i}", $"/l{i}"));
-        for (int i = 1; i <= 8; i++) list.Add(new($"Cross-world LS {i}", $"/cwl{i}"));
-        list.Add(new("None (no header)", ""));
+        for (int i = 1; i <= 8; i++) list.Add(new($"Linkshell {i}", $"/l{i}", "channel.ls"));
+        for (int i = 1; i <= 8; i++) list.Add(new($"Cross-world LS {i}", $"/cwl{i}", "channel.cwls"));
+        list.Add(new("None (no header)", "", null));
         return list.ToArray();
     }
 

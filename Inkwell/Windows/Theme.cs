@@ -82,6 +82,18 @@ public static class Theme
         new("splitter.hover", "Resize bar (hovered / dragging)", "Text box (bottom)", ThemeScope.Accent,
             Array.Empty<ImGuiCol>(), new Vector4(0.26f, 0.59f, 0.98f, 1f)),
 
+        // ---- Chat channel colors (FFXIV's default chat log colors) ----
+        Channel("channel.say", "Say", 0xF7F7F7),
+        Channel("channel.emote", "Emote", 0xBAFFF0),
+        Channel("channel.party", "Party", 0x66E5FF),
+        Channel("channel.tell", "Tell", 0xFFB8DE),
+        Channel("channel.fc", "Free Company", 0xABDBE5),
+        Channel("channel.alliance", "Alliance", 0xFF7F00),
+        Channel("channel.ls", "Linkshells", 0xD4FF7D),
+        Channel("channel.cwls", "Cross-world linkshells", 0xD4FF7D),
+        Channel("channel.yell", "Yell", 0xFFFF00),
+        Channel("channel.shout", "Shout", 0xFFA666),
+
         // ---- Status messages ----
         new("status.error", "Error / misspelled count", "Status messages", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
             new Vector4(1f, 0.4f, 0.4f, 1f)),
@@ -92,6 +104,10 @@ public static class Theme
         new("status.muted", "Hints and muted text", "Status messages", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
             new Vector4(0.6f, 0.6f, 0.6f, 1f)),
     };
+
+    private static ThemeEntry Channel(string key, string label, uint rgb) =>
+        new(key, label, "Chat channel colors", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
+            new Vector4(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f));
 
     private static readonly Dictionary<string, ThemeEntry> ByKey = Entries.ToDictionary(e => e.Key);
 

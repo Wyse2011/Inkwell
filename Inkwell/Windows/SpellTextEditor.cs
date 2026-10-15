@@ -29,6 +29,7 @@ public sealed unsafe class SpellTextEditor
 
     private string buffer = string.Empty;   // What ImGui edits. Contains soft-wrap '\n's.
     private string? pendingWrap;            // Re-wrapped text waiting to be pushed into ImGui's live buffer.
+    private string? pendingPrefixRemoval;   // Text to cut from the start of ImGui's live buffer.
     private float lastWrapWidth = -1f;
     private bool dirty = true;
     private int cursorLine;
@@ -61,6 +62,21 @@ public sealed unsafe class SpellTextEditor
     {
         if (m.Start + m.Length > Text.Length || Text.Substring(m.Start, m.Length) != m.Word) return;
         SetText(Text.Remove(m.Start, m.Length).Insert(m.Start, replacement));
+    }
+
+    /// <summary>
+    /// Removes <paramref name="charCount"/> characters from the start of the text. Works while the
+    /// box has focus: ImGui keeps its own copy of the text then, so the cut is applied in the
+    /// input callback on the next frame.
+    /// </summary>
+    public void RemovePrefix(int charCount)
+    {
+        if (charCount <= 0 || charCount > Text.Length) return;
+
+        if (IsActive)
+            pendingPrefixRemoval = Text[..charCount];
+        else
+            SetText(Text[charCount..]);
     }
 
     /// <summary>Call after the dictionary or spell settings change.</summary>
@@ -154,6 +170,13 @@ public sealed unsafe class SpellTextEditor
             return data.EventChar is '\n' or '\r' ? 1 : 0;
         }
 
+        if (pendingPrefixRemoval != null)
+        {
+            ApplyPrefixRemoval(ref data, pendingPrefixRemoval);
+            pendingPrefixRemoval = null;
+            pendingWrap = null;   // Lengths changed; the wrap is recomputed next frame anyway.
+        }
+
         if (pendingWrap != null)
         {
             var bytes = Encoding.UTF8.GetBytes(pendingWrap);
@@ -186,6 +209,35 @@ public sealed unsafe class SpellTextEditor
     }
 
     private static bool IsSpaceOrNl(byte b) => b == (byte)' ' || b == (byte)'\n';
+
+    /// <summary>Cuts <paramref name="prefix"/> off the start of ImGui's buffer, if it's still there.</summary>
+    private static void ApplyPrefixRemoval(scoped ref ImGuiInputTextCallbackData data, string prefix)
+    {
+        var bytes = Encoding.UTF8.GetBytes(prefix);
+        int n = bytes.Length;
+        if (n == 0 || n > data.BufTextLen) return;
+
+        // Make sure the buffer still starts with the prefix (a soft wrap may have turned a space
+        // into a newline, so treat those as equal).
+        for (int i = 0; i < n; i++)
+        {
+            var b = data.Buf[i];
+            if (b == bytes[i]) continue;
+            if (IsSpaceOrNl(b) && IsSpaceOrNl(bytes[i])) continue;
+            return;
+        }
+
+        // Shift the rest of the text left, including the terminating zero.
+        int remaining = data.BufTextLen - n;
+        for (int i = 0; i <= remaining; i++)
+            data.Buf[i] = data.Buf[i + n];
+
+        data.BufTextLen = remaining;
+        data.CursorPos = Math.Max(0, data.CursorPos - n);
+        data.SelectionStart = Math.Max(0, data.SelectionStart - n);
+        data.SelectionEnd = Math.Max(0, data.SelectionEnd - n);
+        data.BufDirty = 1;
+    }
 
     private void DrawHighlights(Vector2 origin, float lineHeight)
     {

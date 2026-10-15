@@ -3,7 +3,7 @@
     "Author": "Wyse2011",
     "Name": "Inkwell",
     "InternalName": "Inkwell",
-    "AssemblyVersion": "0.4.0.0",
+    "AssemblyVersion": "0.7.1.0",
     "Punchline": "Roleplay scratch pad with inline spell-check highlighting.",
     "Description": "Write long posts in a resizable editor, see misspelled words highlighted right where you type, and copy them to chat in correctly-headed chunks.",
     "ApplicableVersion": "any",
