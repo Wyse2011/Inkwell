@@ -4,6 +4,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Inkwell.Grammar;
 using Inkwell.Pads;
 using Inkwell.Spelling;
 using Inkwell.Windows;
@@ -22,6 +23,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public Configuration Configuration { get; }
     public SpellChecker Spell { get; }
+    public GrammarChecker Grammar { get; }
     public WindowSystem WindowSystem { get; } = new("Inkwell");
     public MainWindow MainWindow { get; }
     public PadManager Pads { get; }
@@ -31,6 +33,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Spell = new SpellChecker(Configuration);
+        Grammar = new GrammarChecker(Configuration);
         LoadDictionary();
 
         MainWindow = new MainWindow(this);

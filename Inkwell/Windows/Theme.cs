@@ -82,6 +82,12 @@ public static class Theme
         new("splitter.hover", "Resize bar (hovered / dragging)", "Text box (bottom)", ThemeScope.Accent,
             Array.Empty<ImGuiCol>(), new Vector4(0.26f, 0.59f, 0.98f, 1f)),
 
+        // ---- Grammar and style ----
+        new("grammar.color", "Grammar mistakes (squiggle)", "Grammar and style", ThemeScope.Accent,
+            Array.Empty<ImGuiCol>(), new Vector4(1f, 0.65f, 0.2f, 1f)),
+        new("style.color", "Style suggestions (dotted line)", "Grammar and style", ThemeScope.Accent,
+            Array.Empty<ImGuiCol>(), new Vector4(0.45f, 0.7f, 1f, 1f)),
+
         // ---- Chat channel colors (FFXIV's default chat log colors) ----
         Channel("channel.say", "Say", 0xF7F7F7),
         Channel("channel.emote", "Emote", 0xBAFFF0),

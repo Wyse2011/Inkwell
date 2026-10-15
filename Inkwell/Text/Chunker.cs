@@ -11,6 +11,7 @@ public readonly record struct ChatHeader(string Name, string Command, string? Co
 public static class ChatHeaders
 {
     public const int TellIndex = 1;
+    public const int EmoteIndex = 2;
 
     // Commands typed at the start of the text, mapped to their entry in All.
     private static readonly Dictionary<string, int> CommandAliases = BuildAliases();

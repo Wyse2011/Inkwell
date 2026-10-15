@@ -43,6 +43,21 @@ public class Configuration : IPluginConfiguration
     public bool IgnoreCapitalized = false;
     public bool IgnoreAllCaps = true;
 
+    // ---- Grammar and style ----
+    public bool GrammarEnabled = true;
+    public bool GrammarDoubledWords = true;
+    public bool GrammarArticles = true;
+    public bool GrammarLowercaseI = true;
+    public bool GrammarCapitalization = true;
+    public bool GrammarSpacing = true;
+    public bool GrammarCommonMistakes = true;
+    public bool StyleRunOns = true;
+    public int RunOnWordLimit = 35;
+    public bool StyleOverusedWords = true;
+    public int OveruseLimit = 3;
+    public bool StyleCloseRepeats = true;
+    public bool StyleRepeatedStarts = true;
+
     // ---- Highlighting in the editor ----
     public bool HighlightRecolor = true;
     public bool HighlightUnderline = true;

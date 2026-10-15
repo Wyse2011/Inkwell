@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Text;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
+using Inkwell.Grammar;
 using Inkwell.Spelling;
 using Inkwell.Text;
 
@@ -25,6 +26,7 @@ public sealed unsafe class SpellTextEditor
     private const int MaxBytes = 4000;
 
     private readonly SpellChecker spell;
+    private readonly GrammarChecker grammar;
     private readonly Configuration config;
 
     private string buffer = string.Empty;   // What ImGui edits. Contains soft-wrap '\n's.
@@ -35,11 +37,35 @@ public sealed unsafe class SpellTextEditor
     private int cursorLine;
     private int lastCursorLine = -1;
     private List<Misspelling> misspellings = new();
+    private List<GrammarIssue> grammarIssues = new();
+    private bool emoteChannel;
 
-    public SpellTextEditor(SpellChecker spell, Configuration config)
+    public SpellTextEditor(SpellChecker spell, GrammarChecker grammar, Configuration config)
     {
         this.spell = spell;
+        this.grammar = grammar;
         this.config = config;
+    }
+
+    public IReadOnlyList<GrammarIssue> GrammarIssues => grammarIssues;
+
+    /// <summary>Set by the pad each frame; emotes may start with a lowercase word.</summary>
+    public bool EmoteChannel
+    {
+        get => emoteChannel;
+        set
+        {
+            if (emoteChannel == value) return;
+            emoteChannel = value;
+            dirty = true;
+        }
+    }
+
+    /// <summary>Replaces text at a position, if it still says <paramref name="expected"/>.</summary>
+    public void ReplaceRange(int start, int length, string expected, string replacement)
+    {
+        if (start < 0 || start + length > Text.Length || Text.Substring(start, length) != expected) return;
+        SetText(Text.Remove(start, length).Insert(start, replacement));
     }
 
     /// <summary>The text as it will be sent: no soft wraps.</summary>
@@ -154,6 +180,7 @@ public sealed unsafe class SpellTextEditor
 
         Text = buffer.Replace('\n', ' ');
         misspellings = spell.Check(Text);
+        grammarIssues = grammar.Check(Text, emoteChannel);
         lastWrapWidth = wrapWidth;
         dirty = false;
     }
@@ -241,35 +268,97 @@ public sealed unsafe class SpellTextEditor
 
     private void DrawHighlights(Vector2 origin, float lineHeight)
     {
-        if (misspellings.Count == 0) return;
-        if (!config.HighlightRecolor && !config.HighlightUnderline && !config.HighlightBackground) return;
-
         var drawList = ImGui.GetWindowDrawList();
-        var color = ImGui.GetColorU32(config.MisspellColor);
-        var fill = ImGui.GetColorU32(config.MisspellColor with { W = config.MisspellColor.W * 0.25f });
         var starts = WordWrapper.LineStarts(buffer);
+        var mouse = ImGui.GetMousePos();
+        var canHover = ImGui.IsWindowHovered(ImGuiHoveredFlags.ChildWindows) && !ImGui.IsMouseDown(ImGuiMouseButton.Left);
+        string? tooltip = null;
 
-        foreach (var m in misspellings)
+        // Grammar and style first, so spelling marks draw on top of them.
+        if (grammarIssues.Count > 0)
         {
-            if (m.Start + m.Length > buffer.Length) continue;
+            var grammarColor = ImGui.GetColorU32(Theme.Accent(config, "grammar.color"));
+            var styleColor = ImGui.GetColorU32(Theme.Accent(config, "style.color"));
 
-            int line = WordWrapper.LineOf(starts, m.Start);
-            int lineStart = starts[line];
-            float x = ImGui.CalcTextSize(buffer.Substring(lineStart, m.Start - lineStart)).X;
-            var word = buffer.Substring(m.Start, m.Length);
-            float w = ImGui.CalcTextSize(word).X;
+            foreach (var issue in grammarIssues)
+            {
+                foreach (var (pos, width) in Segments(starts, issue.Start, issue.Length, origin, lineHeight))
+                {
+                    var y = pos.Y + lineHeight - 1f;
+                    if (issue.Kind == IssueKind.Grammar)
+                        DrawSquiggle(drawList, pos.X, pos.X + width, y, grammarColor);
+                    else
+                        DrawDotted(drawList, pos.X, pos.X + width, y, styleColor);
 
-            var pos = origin + new Vector2(x, line * lineHeight);
-
-            if (config.HighlightBackground)
-                drawList.AddRectFilled(pos, pos + new Vector2(w, lineHeight), fill, 2f);
-
-            if (config.HighlightRecolor)
-                drawList.AddText(pos, color, word);
-
-            if (config.HighlightUnderline)
-                DrawSquiggle(drawList, pos.X, pos.X + w, pos.Y + lineHeight - 1f, color);
+                    if (canHover && Inside(mouse, pos, width, lineHeight))
+                        tooltip = issue.Fix != null ? $"{issue.Message}\nSuggestion: {issue.Fix}" : issue.Message;
+                }
+            }
         }
+
+        if (misspellings.Count > 0 &&
+            (config.HighlightRecolor || config.HighlightUnderline || config.HighlightBackground))
+        {
+            var color = ImGui.GetColorU32(config.MisspellColor);
+            var fill = ImGui.GetColorU32(config.MisspellColor with { W = config.MisspellColor.W * 0.25f });
+
+            foreach (var m in misspellings)
+            {
+                foreach (var (pos, width) in Segments(starts, m.Start, m.Length, origin, lineHeight))
+                {
+                    if (config.HighlightBackground)
+                        drawList.AddRectFilled(pos, pos + new Vector2(width, lineHeight), fill, 2f);
+                    if (config.HighlightRecolor)
+                        drawList.AddText(pos, color, buffer.Substring(m.Start, m.Length));
+                    if (config.HighlightUnderline)
+                        DrawSquiggle(drawList, pos.X, pos.X + width, pos.Y + lineHeight - 1f, color);
+
+                    if (canHover && Inside(mouse, pos, width, lineHeight))
+                        tooltip = $"\"{m.Word}\" isn't in the dictionary.\nClick it in the spelling bar for suggestions.";
+                }
+            }
+        }
+
+        if (tooltip != null)
+            ImGui.SetTooltip(tooltip);
+    }
+
+    /// <summary>
+    /// Screen position and width of each visual line a text range covers (a run-on sentence can
+    /// span several wrapped lines).
+    /// </summary>
+    private List<(Vector2 Pos, float Width)> Segments(List<int> starts, int start, int length, Vector2 origin, float lineHeight)
+    {
+        var result = new List<(Vector2, float)>();
+        int end = Math.Min(start + length, buffer.Length);
+        int pos = start;
+
+        while (pos < end)
+        {
+            int line = WordWrapper.LineOf(starts, pos);
+            int lineStart = starts[line];
+            int lineEnd = line + 1 < starts.Count ? starts[line + 1] - 1 : buffer.Length; // index of the '\n'
+            int segEnd = Math.Min(end, lineEnd);
+
+            if (segEnd > pos)
+            {
+                float x = ImGui.CalcTextSize(buffer.Substring(lineStart, pos - lineStart)).X;
+                float w = ImGui.CalcTextSize(buffer.Substring(pos, segEnd - pos)).X;
+                result.Add((origin + new Vector2(x, line * lineHeight), w));
+            }
+
+            pos = segEnd + 1; // Skip the soft-wrap newline.
+        }
+        return result;
+    }
+
+    private static bool Inside(Vector2 p, Vector2 min, float width, float height) =>
+        p.X >= min.X && p.X <= min.X + width && p.Y >= min.Y && p.Y <= min.Y + height;
+
+    private static void DrawDotted(ImDrawListPtr drawList, float x0, float x1, float y, uint color)
+    {
+        for (float x = x0; x < x1; x += 4f)
+            drawList.AddRectFilled(new Vector2(x, y - 1f), new Vector2(MathF.Min(x + 2f, x1), y + 0.5f), color);
     }
 
     private static void DrawSquiggle(ImDrawListPtr drawList, float x0, float x1, float y, uint color)

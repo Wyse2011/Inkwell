@@ -59,6 +59,46 @@ public sealed class ConfigWindow : Window
             }
         }
 
+        if (ImGui.CollapsingHeader("Grammar and style"))
+        {
+            changed |= ImGui.Checkbox("Check grammar and style", ref config.GrammarEnabled);
+            using (ImRaii.Disabled(!config.GrammarEnabled))
+            {
+                ImGui.TextDisabled("Grammar (orange squiggle)");
+                changed |= ImGui.Checkbox("Doubled words (\"the the\")", ref config.GrammarDoubledWords);
+                changed |= ImGui.Checkbox("\"a\" vs \"an\"", ref config.GrammarArticles);
+                changed |= ImGui.Checkbox("Lowercase \"i\"", ref config.GrammarLowercaseI);
+                changed |= ImGui.Checkbox("Sentences starting with a lowercase letter", ref config.GrammarCapitalization);
+                changed |= ImGui.Checkbox("Missing space after punctuation", ref config.GrammarSpacing);
+                changed |= ImGui.Checkbox("Common mix-ups (could of, better then, alot...)", ref config.GrammarCommonMistakes);
+
+                ImGui.Spacing();
+                ImGui.TextDisabled("Style (blue dotted line)");
+                changed |= ImGui.Checkbox("Run-on sentences", ref config.StyleRunOns);
+                using (ImRaii.Disabled(!config.StyleRunOns))
+                {
+                    ImGui.SetNextItemWidth(160);
+                    changed |= ImGui.SliderInt("Flag sentences longer than (words)", ref config.RunOnWordLimit, 15, 80);
+                }
+                changed |= ImGui.Checkbox("Overused words", ref config.StyleOverusedWords);
+                using (ImRaii.Disabled(!config.StyleOverusedWords))
+                {
+                    ImGui.SetNextItemWidth(160);
+                    changed |= ImGui.SliderInt("Flag a word used this many times", ref config.OveruseLimit, 2, 10);
+                    changed |= ImGui.Checkbox("Also flag a word repeated close to itself", ref config.StyleCloseRepeats);
+                }
+                changed |= ImGui.Checkbox("Several sentences in a row starting the same way", ref config.StyleRepeatedStarts);
+
+                ImGui.Spacing();
+                if (ImGui.Button("Un-ignore everything"))
+                {
+                    plugin.Grammar.ClearIgnored();
+                    changed = true;
+                }
+                ImGui.TextDisabled("Ignored suggestions come back when the game restarts.");
+            }
+        }
+
         if (ImGui.CollapsingHeader("Channel colors", ImGuiTreeNodeFlags.DefaultOpen))
         {
             changed |= ImGui.Checkbox("Tint the text box and preview with the channel's color", ref config.ChannelTintBackground);

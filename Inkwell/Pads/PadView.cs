@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Inkwell.Chat;
+using Inkwell.Grammar;
 using Inkwell.Spelling;
 using Inkwell.Text;
 using Inkwell.Windows;
@@ -52,7 +53,7 @@ public sealed class PadView
         this.pad = pad;
         config = plugin.Configuration;
 
-        editor = new SpellTextEditor(plugin.Spell, config);
+        editor = new SpellTextEditor(plugin.Spell, plugin.Grammar, config);
         editor.SetText(pad.Text);
         editor.TextChanged += () =>
         {
@@ -95,6 +96,7 @@ public sealed class PadView
         DrawToolbar();
         DrawStatus();
         DrawSpellBar();
+        DrawGrammarBar();
 
         var avail = ImGui.GetContentRegionAvail();
         var spacing = ImGui.GetStyle().ItemSpacing.Y;
@@ -109,6 +111,8 @@ public sealed class PadView
             DrawPreview(new Vector2(0, previewHeight));
 
         DrawSplitter(avail.X, editorHeight, maxEditor);
+
+        editor.EmoteChannel = pad.HeaderIndex == ChatHeaders.EmoteIndex;
 
         using (Theme.Push(config, ThemeScope.Editor))
         using (PushChannelColors(ImGuiCol.FrameBg, ImGuiCol.ChildBg))
@@ -472,6 +476,89 @@ public sealed class PadView
         }
 
         DrawFixPopup();
+    }
+
+    // ------------------------------------------------------------------ grammar bar
+
+    private GrammarIssue? selectedIssue;
+
+    private void DrawGrammarBar()
+    {
+        if (!config.GrammarEnabled) return;
+
+        // One button per distinct problem (an overused word flags every use, but gets one button).
+        var issues = editor.GrammarIssues
+            .GroupBy(i => (i.Rule, i.Original.ToLowerInvariant()))
+            .Select(g => g.First())
+            .ToList();
+        if (issues.Count == 0) return;
+
+        var grammarColor = Theme.Accent(config, "grammar.color");
+        var styleColor = Theme.Accent(config, "style.color");
+        var grammarCount = issues.Count(i => i.Kind == IssueKind.Grammar);
+        var styleCount = issues.Count - grammarCount;
+
+        if (grammarCount > 0)
+            ImGui.TextColored(grammarColor, $"{grammarCount} grammar");
+        if (styleCount > 0)
+        {
+            if (grammarCount > 0) ImGui.SameLine();
+            ImGui.TextColored(styleColor, $"{styleCount} style");
+        }
+
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        var padX = ImGui.GetStyle().FramePadding.X * 2;
+
+        for (int i = 0; i < issues.Count && i < MaxWordButtons; i++)
+        {
+            var issue = issues[i];
+            var width = ImGui.CalcTextSize(issue.Label).X + padX;
+            ImGui.SameLine();
+            if (ImGui.GetCursorScreenPos().X + width > right)
+                ImGui.NewLine();
+
+            using (ImRaii.PushColor(ImGuiCol.Text, issue.Kind == IssueKind.Grammar ? grammarColor : styleColor))
+            {
+                if (ImGui.SmallButton($"{issue.Label}##gi{i}"))
+                {
+                    selectedIssue = issue;
+                    ImGui.OpenPopup("##grammarfix");
+                }
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(issue.Message);
+        }
+
+        DrawGrammarPopup(grammarColor, styleColor);
+    }
+
+    private void DrawGrammarPopup(Vector4 grammarColor, Vector4 styleColor)
+    {
+        using var popup = ImRaii.Popup("##grammarfix");
+        if (!popup || selectedIssue is not { } issue) return;
+
+        var isGrammar = issue.Kind == IssueKind.Grammar;
+        ImGui.TextColored(isGrammar ? grammarColor : styleColor, isGrammar ? "Grammar" : "Style suggestion");
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + 320);
+        ImGui.TextUnformatted(issue.Message);
+        ImGui.PopTextWrapPos();
+        ImGui.Separator();
+
+        if (issue.Fix != null && ImGui.Selectable($"Change to \"{issue.Fix}\""))
+        {
+            editor.ReplaceRange(issue.Start, issue.Length, issue.Original, issue.Fix);
+            ImGui.CloseCurrentPopup();
+        }
+
+        if (ImGui.Selectable("Ignore this"))
+        {
+            plugin.Grammar.Ignore(issue);
+            manager.NotifySettingsChanged();
+            ImGui.CloseCurrentPopup();
+        }
+
+        if (ImGui.Selectable("Close"))
+            ImGui.CloseCurrentPopup();
     }
 
     private void DrawFixPopup()
