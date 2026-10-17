@@ -128,24 +128,21 @@ public static class Chunker
         }
 
         var useMarker = !string.IsNullOrWhiteSpace(cfg.ContinuationMarker);
-        var worstMarker = useMarker ? " " + FormatMarker(cfg.ContinuationMarker, 99, 99) : "";
-        var budget = Math.Max(20, max - fixedBytes - Utf8(worstMarker));
 
-        var bodies = new List<string>();
-        int pos = 0;
-        while (pos < text.Length)
+        // Leave room for the marker at its widest. Start by assuming up to 99 chunks; if the post
+        // turns out longer (100+ chunks means "(100/120)" needs more space), split again with
+        // room for more digits. There's no upper limit on the number of chunks.
+        List<string> bodies;
+        int digits = 2;
+        while (true)
         {
-            int end = CutIndex(text, pos, budget);
-            if (end >= text.Length)
-            {
-                bodies.Add(text[pos..].Trim());
-                break;
-            }
+            var widest = (int)Math.Pow(10, digits) - 1;
+            var worstMarker = useMarker ? " " + FormatMarker(cfg.ContinuationMarker, widest, widest) : "";
+            var budget = Math.Max(20, max - fixedBytes - Utf8(worstMarker));
 
-            int split = FindSplit(text, pos, end, cfg.SplitOnSentences);
-            bodies.Add(text[pos..split].Trim());
-            pos = split;
-            while (pos < text.Length && text[pos] == ' ') pos++;
+            bodies = Split(text, budget, cfg.SplitOnSentences);
+            if (!useMarker || bodies.Count <= widest || digits >= 6) break;
+            digits++;
         }
 
         for (int i = 0; i < bodies.Count; i++)
@@ -157,6 +154,27 @@ public static class Chunker
             result.Add(prefix + open + bodies[i] + close + marker);
         }
         return result;
+    }
+
+    private static List<string> Split(string text, int budget, bool preferSentences)
+    {
+        var bodies = new List<string>();
+        int pos = 0;
+        while (pos < text.Length)
+        {
+            int end = CutIndex(text, pos, budget);
+            if (end >= text.Length)
+            {
+                bodies.Add(text[pos..].Trim());
+                break;
+            }
+
+            int split = FindSplit(text, pos, end, preferSentences);
+            bodies.Add(text[pos..split].Trim());
+            pos = split;
+            while (pos < text.Length && text[pos] == ' ') pos++;
+        }
+        return bodies;
     }
 
     public static string FormatMarker(string marker, int current, int total) =>

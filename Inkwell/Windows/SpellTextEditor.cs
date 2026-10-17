@@ -4,7 +4,6 @@ using System.Numerics;
 using System.Text;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
-using Inkwell.Grammar;
 using Inkwell.Spelling;
 using Inkwell.Text;
 
@@ -23,49 +22,28 @@ namespace Inkwell.Windows;
 /// </summary>
 public sealed unsafe class SpellTextEditor
 {
-    private const int MaxBytes = 4000;
+    // Size of the text box's buffer. 4,000 used to cap a pad at about 9 chat messages; this allows
+    // roughly 200+ messages, far more than anyone will write in one go, while keeping memory use
+    // small. Raise it if you ever need more.
+    private const int MaxBytes = 100_000;
 
     private readonly SpellChecker spell;
-    private readonly GrammarChecker grammar;
     private readonly Configuration config;
 
     private string buffer = string.Empty;   // What ImGui edits. Contains soft-wrap '\n's.
     private string? pendingWrap;            // Re-wrapped text waiting to be pushed into ImGui's live buffer.
     private string? pendingPrefixRemoval;   // Text to cut from the start of ImGui's live buffer.
     private float lastWrapWidth = -1f;
+    private float lastFontSize = -1f;
     private bool dirty = true;
     private int cursorLine;
     private int lastCursorLine = -1;
     private List<Misspelling> misspellings = new();
-    private List<GrammarIssue> grammarIssues = new();
-    private bool emoteChannel;
 
-    public SpellTextEditor(SpellChecker spell, GrammarChecker grammar, Configuration config)
+    public SpellTextEditor(SpellChecker spell, Configuration config)
     {
         this.spell = spell;
-        this.grammar = grammar;
         this.config = config;
-    }
-
-    public IReadOnlyList<GrammarIssue> GrammarIssues => grammarIssues;
-
-    /// <summary>Set by the pad each frame; emotes may start with a lowercase word.</summary>
-    public bool EmoteChannel
-    {
-        get => emoteChannel;
-        set
-        {
-            if (emoteChannel == value) return;
-            emoteChannel = value;
-            dirty = true;
-        }
-    }
-
-    /// <summary>Replaces text at a position, if it still says <paramref name="expected"/>.</summary>
-    public void ReplaceRange(int start, int length, string expected, string replacement)
-    {
-        if (start < 0 || start + length > Text.Length || Text.Substring(start, length) != expected) return;
-        SetText(Text.Remove(start, length).Insert(start, replacement));
     }
 
     /// <summary>The text as it will be sent: no soft wraps.</summary>
@@ -113,7 +91,11 @@ public sealed unsafe class SpellTextEditor
         // AlwaysVerticalScrollbar keeps the content width stable; otherwise the scrollbar appearing
         // would change the wrap width, which could change the line count, which could hide the
         // scrollbar again, and so on.
-        using var child = ImRaii.Child("##inkwell-editor", size, true, ImGuiWindowFlags.AlwaysVerticalScrollbar);
+        // While Ctrl is held the mouse wheel changes text size, so don't also scroll.
+        var childFlags = ImGuiWindowFlags.AlwaysVerticalScrollbar;
+        if (ImGui.GetIO().KeyCtrl) childFlags |= ImGuiWindowFlags.NoScrollWithMouse;
+
+        using var child = ImRaii.Child("##inkwell-editor", size, true, childFlags);
         if (!child) return;
 
         var style = ImGui.GetStyle();
@@ -121,8 +103,13 @@ public sealed unsafe class SpellTextEditor
         var avail = ImGui.GetContentRegionAvail();
         var wrapWidth = MathF.Max(50f, avail.X - style.FramePadding.X * 2f - 4f);
 
-        if (dirty || MathF.Abs(wrapWidth - lastWrapWidth) > 0.5f)
+        // A different text size changes every line's width, so re-wrap.
+        var fontSize = ImGui.GetFontSize();
+        if (dirty || MathF.Abs(wrapWidth - lastWrapWidth) > 0.5f || MathF.Abs(fontSize - lastFontSize) > 0.01f)
+        {
+            lastFontSize = fontSize;
             Reflow(wrapWidth);
+        }
 
         int lineCount = 1;
         foreach (var c in buffer) if (c == '\n') lineCount++;
@@ -180,7 +167,6 @@ public sealed unsafe class SpellTextEditor
 
         Text = buffer.Replace('\n', ' ');
         misspellings = spell.Check(Text);
-        grammarIssues = grammar.Check(Text, emoteChannel);
         lastWrapWidth = wrapWidth;
         dirty = false;
     }
@@ -274,28 +260,6 @@ public sealed unsafe class SpellTextEditor
         var canHover = ImGui.IsWindowHovered(ImGuiHoveredFlags.ChildWindows) && !ImGui.IsMouseDown(ImGuiMouseButton.Left);
         string? tooltip = null;
 
-        // Grammar and style first, so spelling marks draw on top of them.
-        if (grammarIssues.Count > 0)
-        {
-            var grammarColor = ImGui.GetColorU32(Theme.Accent(config, "grammar.color"));
-            var styleColor = ImGui.GetColorU32(Theme.Accent(config, "style.color"));
-
-            foreach (var issue in grammarIssues)
-            {
-                foreach (var (pos, width) in Segments(starts, issue.Start, issue.Length, origin, lineHeight))
-                {
-                    var y = pos.Y + lineHeight - 1f;
-                    if (issue.Kind == IssueKind.Grammar)
-                        DrawSquiggle(drawList, pos.X, pos.X + width, y, grammarColor);
-                    else
-                        DrawDotted(drawList, pos.X, pos.X + width, y, styleColor);
-
-                    if (canHover && Inside(mouse, pos, width, lineHeight))
-                        tooltip = issue.Fix != null ? $"{issue.Message}\nSuggestion: {issue.Fix}" : issue.Message;
-                }
-            }
-        }
-
         if (misspellings.Count > 0 &&
             (config.HighlightRecolor || config.HighlightUnderline || config.HighlightBackground))
         {
@@ -354,12 +318,6 @@ public sealed unsafe class SpellTextEditor
 
     private static bool Inside(Vector2 p, Vector2 min, float width, float height) =>
         p.X >= min.X && p.X <= min.X + width && p.Y >= min.Y && p.Y <= min.Y + height;
-
-    private static void DrawDotted(ImDrawListPtr drawList, float x0, float x1, float y, uint color)
-    {
-        for (float x = x0; x < x1; x += 4f)
-            drawList.AddRectFilled(new Vector2(x, y - 1f), new Vector2(MathF.Min(x + 2f, x1), y + 0.5f), color);
-    }
 
     private static void DrawSquiggle(ImDrawListPtr drawList, float x0, float x1, float y, uint color)
     {

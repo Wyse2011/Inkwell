@@ -44,12 +44,9 @@ Quality-of-life changes on top of the Wordsmith-style workflow:
 - **Misspellings highlighted where you type.** Misspelled words are marked directly in the
   text box at the bottom (red text, a squiggly underline and/or a background highlight, your
   choice), not only in the preview, so they're easy to find before you copy.
-- **Grammar and style checking, offline.** Possible run-on sentences, overused words, words
-  repeated close together and sentences that all start the same way get a blue dotted line;
-  likely mistakes (doubled words, "a" vs "an", lowercase "i", missing capitals or spaces, and
-  mix-ups like "could of" or "better then") get an orange squiggle. Hover an underline for an
-  explanation, or click an issue above the preview to apply the fix or ignore it. Nothing you
-  write is sent anywhere, and every rule can be turned off.
+- **Adjustable text size.** Make the text in the text box (and optionally the preview) as large
+  or small as you like in settings, or hold Ctrl and scroll over the text box. Text stays sharp
+  at every size.
 - **Click-to-fix spelling bar.** Every misspelled word is listed as a button above the preview.
   Click one to pick a suggestion, type a replacement, or add the word to your personal
   dictionary.

@@ -4,7 +4,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using Inkwell.Grammar;
+using Inkwell.Fonts;
 using Inkwell.Pads;
 using Inkwell.Spelling;
 using Inkwell.Windows;
@@ -23,7 +23,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public Configuration Configuration { get; }
     public SpellChecker Spell { get; }
-    public GrammarChecker Grammar { get; }
+    public TextFont TextFont { get; }
     public WindowSystem WindowSystem { get; } = new("Inkwell");
     public MainWindow MainWindow { get; }
     public PadManager Pads { get; }
@@ -33,7 +33,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Spell = new SpellChecker(Configuration);
-        Grammar = new GrammarChecker(Configuration);
+        TextFont = new TextFont(Configuration);
         LoadDictionary();
 
         MainWindow = new MainWindow(this);
@@ -104,6 +104,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenMainUi -= MainWindow.Toggle;
         Pads.Dispose();
+        TextFont.Dispose();
         PluginInterface.UiBuilder.OpenConfigUi -= ConfigWindow.Toggle;
         WindowSystem.RemoveAllWindows();
         CommandManager.RemoveHandler(CommandName);
