@@ -32,13 +32,15 @@ Quality-of-life changes on top of the Wordsmith-style workflow:
   text, chat channel, /tell target, OOC setting and chunk counter. Closing a popped-out window
   puts the pad back in the tabs instead of deleting it, and all pads are saved between sessions.
 - **Type chat commands to switch channels.** Start a pad with `/em `, `/p `, `/fc `, `/l1 `,
-  `/t Name Surname@World ` and so on, and Inkwell switches that pad's channel and removes the
+  `/t Name Surname@World `, `/r ` and so on, and Inkwell switches that pad's channel and removes the
   command from your text, so it never shows up in the post itself. The switch only lasts for
   that post: once it's sent, copied or cleared, the pad goes back to its previous channel.
 - **Color-coded channels like the game's chat log.** Channel names in the dropdown are shown in
   their chat colors (Party blue, Tell pink, Emote teal and so on, using FFXIV's defaults). You can
   optionally tint the text box or color your text by channel too, and every channel's color is
   adjustable in Appearance.
+- **Reply channel.** Pick **Reply (last tell)** in the channel dropdown, or type `/r `, to send
+  your post with `/r` to whoever last sent you a tell.
 - **Resizable text box.** Drag the bar between the chunk preview and the text box to make the
   editor as large as you like. The size is remembered between sessions.
 - **Misspellings highlighted where you type.** Misspelled words are marked directly in the

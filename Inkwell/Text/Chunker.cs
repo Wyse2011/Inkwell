@@ -12,6 +12,21 @@ public static class ChatHeaders
 {
     public const int TellIndex = 1;
     public const int EmoteIndex = 2;
+    public const int NoneIndex = 24;
+
+    // New channels go at the END of All, so the numbers saved in existing pads keep meaning the
+    // same channel. DisplayOrder controls where they appear in the dropdown instead.
+    public const int ReplyIndex = 25;
+
+    /// <summary>Order channels are listed in the dropdown (indexes into All).</summary>
+    public static readonly int[] DisplayOrder = BuildDisplayOrder();
+
+    private static int[] BuildDisplayOrder()
+    {
+        var order = new List<int> { 0, TellIndex, ReplyIndex };
+        for (int i = 2; i <= NoneIndex; i++) order.Add(i);
+        return order.ToArray();
+    }
 
     // Commands typed at the start of the text, mapped to their entry in All.
     private static readonly Dictionary<string, int> CommandAliases = BuildAliases();
@@ -36,6 +51,7 @@ public static class ChatHeaders
             ["a"] = 5, ["alliance"] = 5,
             ["y"] = 6, ["yell"] = 6,
             ["sh"] = 7, ["shout"] = 7,
+            ["r"] = ReplyIndex, ["reply"] = ReplyIndex,
         };
         for (int i = 1; i <= 8; i++)
         {
@@ -91,7 +107,8 @@ public static class ChatHeaders
         };
         for (int i = 1; i <= 8; i++) list.Add(new($"Linkshell {i}", $"/l{i}", "channel.ls"));
         for (int i = 1; i <= 8; i++) list.Add(new($"Cross-world LS {i}", $"/cwl{i}", "channel.cwls"));
-        list.Add(new("None (no header)", "", null));
+        list.Add(new("None (no header)", "", null));          // NoneIndex (24)
+        list.Add(new("Reply (last tell)", "/r", "channel.tell")); // ReplyIndex (25)
         return list.ToArray();
     }
 

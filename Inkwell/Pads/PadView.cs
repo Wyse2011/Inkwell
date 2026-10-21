@@ -138,7 +138,7 @@ public sealed class PadView
         {
             if (combo)
             {
-                for (int i = 0; i < headers.Length; i++)
+                foreach (var i in ChatHeaders.DisplayOrder)
                 {
                     var color = ChannelColor(i);
                     using (ImRaii.PushColor(ImGuiCol.Text, color ?? Vector4.Zero, color != null))
