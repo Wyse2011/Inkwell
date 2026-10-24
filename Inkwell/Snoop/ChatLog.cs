@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -57,12 +58,15 @@ public sealed class ChatLog : IDisposable
         lock (gate) entries.Clear();
     }
 
-    // NOTE ON BINDINGS: this is the classic IChatGui.ChatMessage signature. If a newer Dalamud
-    // changes it, only this method's parameter list needs to follow; the logic stays the same.
-    private void OnChatMessage(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    // Dalamud API 15+: chat events pass a single message object (type, sender, text).
+    private void OnChatMessage(IHandleableChatMessage chat)
     {
         try
         {
+            var type = chat.LogKind;
+            var sender = chat.Sender;
+            var message = chat.Message;
+
             var channel = Classify(type);
             if (channel == null || !IsChannelLogged(channel.Value.Group)) return;
 
