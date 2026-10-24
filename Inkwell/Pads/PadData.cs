@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Inkwell.Pads;
 
@@ -18,6 +19,16 @@ public class PadData
     public bool Detached;
 
     public float EditorHeight = 180f;
+
+    // ---- Chat log (Snooper features) ----
+    /// <summary>Characters whose chat this pad shows ("First Last").</summary>
+    public List<string> Watched = new();
+    /// <summary>Also show whoever is currently targeted.</summary>
+    public bool FollowTarget;
+    public float LogHeight = 180f;
+    public bool NotifyBlink = true;
+    public bool NotifySound;
+    public int NotifySoundId = 1;
 
     /// <summary>
     /// Set when a typed command (like "/p ") switched the channel for one post. The channel goes

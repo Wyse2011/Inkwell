@@ -6,6 +6,7 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Inkwell.Fonts;
 using Inkwell.Pads;
+using Inkwell.Snoop;
 using Inkwell.Spelling;
 using Inkwell.Windows;
 
@@ -18,12 +19,15 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
+    [PluginService] internal static ITargetManager TargetManager { get; private set; } = null!;
 
     private const string CommandName = "/inkwell";
 
     public Configuration Configuration { get; }
     public SpellChecker Spell { get; }
     public TextFont TextFont { get; }
+    public ChatLog ChatLog { get; }
     public WindowSystem WindowSystem { get; } = new("Inkwell");
     public MainWindow MainWindow { get; }
     public PadManager Pads { get; }
@@ -34,6 +38,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Spell = new SpellChecker(Configuration);
         TextFont = new TextFont(Configuration);
+        ChatLog = new ChatLog(Configuration);
         LoadDictionary();
 
         MainWindow = new MainWindow(this);
@@ -41,6 +46,7 @@ public sealed class Plugin : IDalamudPlugin
         WindowSystem.AddWindow(MainWindow);
         WindowSystem.AddWindow(ConfigWindow);
         Pads = new PadManager(this, WindowSystem);
+        ChatLog.EntryAdded += Pads.OnLogEntry;
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -103,6 +109,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         PluginInterface.UiBuilder.Draw -= DrawUi;
         PluginInterface.UiBuilder.OpenMainUi -= MainWindow.Toggle;
+        ChatLog.EntryAdded -= Pads.OnLogEntry;
+        ChatLog.Dispose();
         Pads.Dispose();
         TextFont.Dispose();
         PluginInterface.UiBuilder.OpenConfigUi -= ConfigWindow.Toggle;

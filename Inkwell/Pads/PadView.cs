@@ -5,7 +5,9 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Inkwell.Chat;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Inkwell.Fonts;
+using Inkwell.Snoop;
 using Inkwell.Spelling;
 using Inkwell.Text;
 using Inkwell.Windows;
@@ -41,6 +43,16 @@ public sealed class PadView
     private string statusText = string.Empty;
     private bool statusIsError;
     private DateTime statusUntil = DateTime.MinValue;
+
+    // Chat log / notifications.
+    private string addName = string.Empty;
+    private LogEntry? lastLogEntry;
+    private bool logAtBottom = true;
+    private DateTime lastLookedAt = DateTime.MinValue;
+    private DateTime lastSound = DateTime.MinValue;
+
+    /// <summary>Someone this pad watches posted since you last looked at it.</summary>
+    public bool HasUnread { get; private set; }
 
     private Misspelling selected;
     private List<string> suggestions = new();
@@ -92,25 +104,51 @@ public sealed class PadView
     {
         using var id = ImRaii.PushId(pad.Id);
 
+        // Looking at (or hovering) this pad counts as having seen its new messages.
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows) ||
+            ImGui.IsWindowHovered(ImGuiHoveredFlags.RootAndChildWindows))
+        {
+            HasUnread = false;
+            lastLookedAt = DateTime.Now;
+        }
+
         RebuildChunksIfNeeded();
         DrawToolbar();
+        DrawPeopleBar();
         DrawStatus();
         DrawSpellBar();
 
         var avail = ImGui.GetContentRegionAvail();
         var spacing = ImGui.GetStyle().ItemSpacing.Y;
+        var gap = SplitterHeight + spacing * 2;
 
-        // Clamp the saved editor height to what fits in the window right now.
-        var maxEditor = MathF.Max(MinEditorHeight, avail.Y - MinPreviewHeight - SplitterHeight - spacing * 2);
+        // Top area: chat log and/or chunk preview. Bottom: the text box.
+        var showLog = pad.FollowTarget || pad.Watched.Count > 0;
+        var showPreview = config.ShowChunkPreview || !showLog;
+        var topMin = showLog && showPreview ? MinPreviewHeight * 2 + gap : MinPreviewHeight;
+
+        var maxEditor = MathF.Max(MinEditorHeight, avail.Y - topMin - gap);
         var editorHeight = Math.Clamp(pad.EditorHeight, MinEditorHeight, maxEditor);
-        var previewHeight = MathF.Max(MinPreviewHeight, avail.Y - editorHeight - SplitterHeight - spacing * 2);
+        var topHeight = MathF.Max(topMin, avail.Y - editorHeight - gap);
 
-        using (Theme.Push(config, ThemeScope.Preview))
-        using (PushChannelColors(ImGuiCol.ChildBg))
-        using (config.TextSizeInPreview ? plugin.TextFont.Push() : null)
-            DrawPreview(new Vector2(0, previewHeight));
+        if (showLog && showPreview)
+        {
+            var maxLog = MathF.Max(MinPreviewHeight, topHeight - MinPreviewHeight - gap);
+            var logHeight = Math.Clamp(pad.LogHeight, MinPreviewHeight, maxLog);
+            DrawLogPanel(logHeight);
+            DrawSplitter("##logsplitter", avail.X, logHeight, MinPreviewHeight, maxLog, true, v => pad.LogHeight = v);
+            DrawPreviewPanel(MathF.Max(MinPreviewHeight, topHeight - logHeight - gap));
+        }
+        else if (showLog)
+        {
+            DrawLogPanel(topHeight);
+        }
+        else
+        {
+            DrawPreviewPanel(topHeight);
+        }
 
-        DrawSplitter(avail.X, editorHeight, maxEditor);
+        DrawSplitter("##splitter", avail.X, editorHeight, MinEditorHeight, maxEditor, false, v => pad.EditorHeight = v);
 
         var editorTopLeft = ImGui.GetCursorScreenPos();
 
@@ -599,9 +637,10 @@ public sealed class PadView
 
     // ------------------------------------------------------------------ splitter
 
-    private void DrawSplitter(float width, float editorHeight, float maxEditor)
+    /// <param name="growsDown">True if dragging down makes the panel above bigger.</param>
+    private void DrawSplitter(string id, float width, float current, float min, float max, bool growsDown, Action<float> set)
     {
-        ImGui.InvisibleButton("##splitter", new Vector2(MathF.Max(1, width), SplitterHeight));
+        ImGui.InvisibleButton(id, new Vector2(MathF.Max(1, width), SplitterHeight));
         var hovered = ImGui.IsItemHovered();
         var active = ImGui.IsItemActive();
 
@@ -610,18 +649,202 @@ public sealed class PadView
 
         if (active)
         {
-            // Dragging up makes the editor bigger.
-            var newHeight = editorHeight - ImGui.GetIO().MouseDelta.Y;
-            pad.EditorHeight = Math.Clamp(newHeight, MinEditorHeight, maxEditor);
+            var delta = ImGui.GetIO().MouseDelta.Y;
+            set(Math.Clamp(current + (growsDown ? delta : -delta), min, max));
         }
 
         if (ImGui.IsItemDeactivated())
             manager.QueueSave();
 
-        var min = ImGui.GetItemRectMin();
-        var max = ImGui.GetItemRectMax();
-        var mid = (min.Y + max.Y) / 2f;
+        var rmin = ImGui.GetItemRectMin();
+        var rmax = ImGui.GetItemRectMax();
+        var mid = (rmin.Y + rmax.Y) / 2f;
         var col = ImGui.GetColorU32(Theme.Accent(config, active || hovered ? "splitter.hover" : "splitter"));
-        ImGui.GetWindowDrawList().AddRectFilled(new Vector2(min.X, mid - 1), new Vector2(max.X, mid + 1), col);
+        ImGui.GetWindowDrawList().AddRectFilled(new Vector2(rmin.X, mid - 1), new Vector2(rmax.X, mid + 1), col);
+    }
+
+    private void DrawPreviewPanel(float height)
+    {
+        using (Theme.Push(config, ThemeScope.Preview))
+        using (PushChannelColors(ImGuiCol.ChildBg))
+        using (config.TextSizeInPreview ? plugin.TextFont.Push() : null)
+            DrawPreview(new Vector2(0, height));
+    }
+
+    // ------------------------------------------------------------------ chat log (Snooper)
+
+    /// <summary>Everyone whose lines this pad shows right now.</summary>
+    private HashSet<string> WatchedNames()
+    {
+        var names = new HashSet<string>(pad.Watched, StringComparer.OrdinalIgnoreCase);
+        if (pad.FollowTarget && CurrentTargetName() is { } target)
+            names.Add(target);
+        return names;
+    }
+
+    private static string? CurrentTargetName() =>
+        Plugin.TargetManager.Target is IPlayerCharacter player ? player.Name.TextValue : null;
+
+    private void DrawPeopleBar()
+    {
+        if (ImGui.SmallButton("+ Target"))
+        {
+            if (CurrentTargetName() is { } name) AddWatched(name);
+            else SetStatus("Target a player first, then click + Target.", true);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Show what your current target says in this pad.");
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150);
+        if (ImGui.InputTextWithHint("##addname", "Add by name...", ref addName, 40, ImGuiInputTextFlags.EnterReturnsTrue))
+        {
+            AddWatched(addName);
+            addName = string.Empty;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Type a character name (First Last) and press Enter.");
+
+        ImGui.SameLine();
+        if (ImGui.Checkbox("Follow target", ref pad.FollowTarget))
+            manager.QueueSave();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Also show whoever you currently have targeted.");
+
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Alerts"))
+            ImGui.OpenPopup("##alerts");
+        DrawAlertsPopup();
+
+        // Name tags, flowing onto new lines as needed.
+        var following = pad.FollowTarget ? CurrentTargetName() : null;
+        if (pad.Watched.Count == 0 && following == null) return;
+
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        var padX = ImGui.GetStyle().FramePadding.X * 2;
+        var first = true;
+
+        for (int i = 0; i < pad.Watched.Count; i++)
+        {
+            var label = $"{pad.Watched[i]}  x";
+            FlowSameLine(ref first, ImGui.CalcTextSize(label).X + padX, right);
+            if (ImGui.SmallButton($"{label}##watch{i}"))
+            {
+                SetStatus($"Stopped showing {pad.Watched[i]}.", false);
+                pad.Watched.RemoveAt(i);
+                manager.QueueSave();
+                break;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Click to remove from this pad.");
+        }
+
+        if (following != null && !pad.Watched.Contains(following, StringComparer.OrdinalIgnoreCase))
+        {
+            var label = $"Target: {following}";
+            FlowSameLine(ref first, ImGui.CalcTextSize(label).X, right);
+            ImGui.TextColored(Dim, label);
+        }
+    }
+
+    private static void FlowSameLine(ref bool first, float width, float right)
+    {
+        if (first) { first = false; return; }
+        ImGui.SameLine();
+        if (ImGui.GetCursorScreenPos().X + width > right)
+            ImGui.NewLine();
+    }
+
+    private void AddWatched(string name)
+    {
+        name = string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (name.Length == 0) return;
+
+        if (pad.Watched.Contains(name, StringComparer.OrdinalIgnoreCase))
+        {
+            SetStatus($"{name} is already in this pad.", false);
+            return;
+        }
+
+        pad.Watched.Add(name);
+        manager.QueueSave();
+        SetStatus($"Now showing {name} in \"{pad.Name}\".", false);
+    }
+
+    private void DrawAlertsPopup()
+    {
+        using var popup = ImRaii.Popup("##alerts");
+        if (!popup) return;
+
+        ImGui.TextUnformatted($"When someone in \"{pad.Name}\" posts:");
+        if (ImGui.Checkbox("Blink the tab / window title", ref pad.NotifyBlink)) manager.QueueSave();
+        if (ImGui.Checkbox("Play a sound", ref pad.NotifySound)) manager.QueueSave();
+
+        using (ImRaii.Disabled(!pad.NotifySound))
+        {
+            ImGui.SetNextItemWidth(140);
+            if (ImGui.SliderInt("##sound", ref pad.NotifySoundId, ChatSound.Min, ChatSound.Max, "Sound <se.%d>"))
+                manager.QueueSave();
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Test"))
+                ChatSound.Play(pad.NotifySoundId);
+        }
+
+        ImGui.TextDisabled(config.NotifyOnlyWhenUnfocused
+            ? "Only alerts while you're not looking at this pad."
+            : "Alerts even while you're looking at this pad.");
+    }
+
+    private void DrawLogPanel(float height)
+    {
+        using var child = ImRaii.Child("##chatlog", new Vector2(0, height), true);
+        if (!child) return;
+        using var font = config.TextSizeInPreview ? plugin.TextFont.Push() : null;
+
+        var names = WatchedNames();
+        if (names.Count == 0)
+        {
+            ImGui.TextColored(Dim, "Target a player to see what they say here.");
+            return;
+        }
+
+        var lines = plugin.ChatLog.For(names, config.LogIncludeSelf);
+        if (lines.Count == 0)
+            ImGui.TextColored(Dim, $"Nothing yet from {string.Join(", ", names)}.");
+
+        foreach (var e in lines)
+        {
+            var time = config.LogTimestamps ? $"[{e.Time:HH:mm}] " : "";
+            var body = e.NameInText ? e.Text : e.IsEmote ? $"{e.Name} {e.Text}" : $"{e.Name}: {e.Text}";
+            using (ImRaii.PushColor(ImGuiCol.Text, Theme.Accent(config, e.ColorKey)))
+                ImGui.TextWrapped(time + body);
+        }
+
+        // Follow new lines, unless you've scrolled up to read something older.
+        var newest = lines.Count > 0 ? lines[^1] : null;
+        if (!ReferenceEquals(newest, lastLogEntry))
+        {
+            if (logAtBottom) ImGui.SetScrollHereY(1f);
+            lastLogEntry = newest;
+        }
+        logAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 4f;
+    }
+
+    /// <summary>Called for every new chat line; blinks and/or beeps if it's from someone here.</summary>
+    public void OnLogEntry(LogEntry entry)
+    {
+        if (entry.IsSelf || !WatchedNames().Contains(entry.Name)) return;
+
+        var looking = (DateTime.Now - lastLookedAt).TotalMilliseconds < 300;
+        if (looking && config.NotifyOnlyWhenUnfocused) return;
+
+        if (pad.NotifyBlink && !looking)
+            HasUnread = true;
+
+        if (pad.NotifySound && (DateTime.Now - lastSound).TotalSeconds > 1.5)
+        {
+            lastSound = DateTime.Now;
+            ChatSound.Play(pad.NotifySoundId);
+        }
     }
 }

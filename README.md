@@ -21,10 +21,29 @@ own and should be reported here, not to Wordsmith.
 
 **Wordsmith repository:** https://github.com/MythicPalette/Wordsmith-DalamudPlugin
 
+### And on Snooper
+
+Inkwell's chat log features (following what specific people say, per-window watch lists,
+and blink/sound notifications) are modeled on
+**[Snooper](https://codeberg.org/Linneris/dalamud-snooper)** by **Linneris**, a plugin built to
+help you keep track of individual speakers at busy RP events. Thank you to Linneris and
+Snooper's contributors for the idea and the inspiration. As with Wordsmith, Inkwell's code is
+written from scratch, so please report Inkwell bugs here rather than to Snooper.
+
+**Snooper repository:** https://codeberg.org/Linneris/dalamud-snooper
+
 ## What Inkwell changes and adds
 
 Quality-of-life changes on top of the Wordsmith-style workflow:
 
+- **Chat log for the people you're writing with (from Snooper).** Add people to a pad with
+  **+ Target** (or by name), or turn on **Follow target**, and everything they say (say, emotes,
+  yells, party, FC, linkshells, tells) appears above your text, colored by channel, with your
+  own lines included if you like. Each pad has its own list of people, so one pad can follow
+  your scene partner while another follows your party.
+- **New-message alerts.** Per pad, the tab or window title blinks and/or a game sound
+  (`<se.1>` to `<se.16>`) plays when someone in that pad posts, optionally only when you're not
+  already looking at it.
 - **Tabs and pop-out windows.** Keep several pads open as tabs (click **+** to add one), and
   pop any pad out into its own window so you can see several at once. Drag a tab away from
   the tab row to tear it off into a window, and drag a window by its title bar back over the
@@ -188,6 +207,9 @@ ImGui can't color individual words inside a text box, so Inkwell draws over it:
 - [Wordsmith](https://github.com/MythicPalette/Wordsmith-DalamudPlugin) by MythicPalette, the
   plugin whose design and workflow Inkwell is built on.
 - [Dalamud](https://github.com/goatcorp/Dalamud) and the goatcorp team.
-- [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs), used for sending chat.
+- [Snooper](https://codeberg.org/Linneris/dalamud-snooper) by Linneris, the plugin whose
+  per-character chat log Inkwell's chat log is modeled on.
+- [FFXIVClientStructs](https://github.com/aers/FFXIVClientStructs), used for sending chat and
+  playing notification sounds.
 - [dwyl/english-words](https://github.com/dwyl/english-words) (public domain), the default
   spell-check word list.

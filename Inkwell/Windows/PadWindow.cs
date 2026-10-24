@@ -13,6 +13,7 @@ public sealed class PadWindow : Window
     private readonly PadManager manager;
     private readonly PadView view;
     private ThemePush windowTheme;
+    private int blinkPushes;
 
     private bool placePending;
     private bool titlePressed;   // Mouse went down on this window's title bar.
@@ -45,10 +46,12 @@ public sealed class PadWindow : Window
     {
         WindowName = Title(view.Data);
         windowTheme = Theme.Push(config, ThemeScope.Window);
+        blinkPushes = view.HasUnread && Theme.BlinkOn ? MainWindow.PushTitleBlink(config) : 0;
     }
 
     public override void PostDraw()
     {
+        if (blinkPushes > 0) ImGui.PopStyleColor(blinkPushes);
         windowTheme.Dispose();
 
         // Position is only forced for the first frame, then the window moves freely.

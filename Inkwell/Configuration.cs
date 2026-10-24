@@ -43,6 +43,20 @@ public class Configuration : IPluginConfiguration
     public bool IgnoreCapitalized = false;
     public bool IgnoreAllCaps = true;
 
+    // ---- Chat log (Snooper features) ----
+    public bool ShowChunkPreview = true;
+    public bool LogIncludeSelf = true;
+    public bool LogTimestamps = true;
+    public int LogMaxEntries = 5000;
+    public bool LogSay = true;
+    public bool LogEmotes = true;
+    public bool LogYellShout = true;
+    public bool LogParty = true;
+    public bool LogFreeCompany = true;
+    public bool LogLinkshells = false;
+    public bool LogTells = true;
+    public bool NotifyOnlyWhenUnfocused = true;
+
     // ---- Text size ----
     public bool CustomTextSize = false;
     public float TextSize = 20f;

@@ -94,6 +94,10 @@ public static class Theme
         Channel("channel.yell", "Yell", 0xFFFF00),
         Channel("channel.shout", "Shout", 0xFFA666),
 
+        // ---- Notifications ----
+        new("notify.blink", "Blink color (new messages)", "Notifications", ThemeScope.Accent,
+            Array.Empty<ImGuiCol>(), new Vector4(1f, 0.6f, 0.15f, 1f)),
+
         // ---- Status messages ----
         new("status.error", "Error / misspelled count", "Status messages", ThemeScope.Accent, Array.Empty<ImGuiCol>(),
             new Vector4(1f, 0.4f, 0.4f, 1f)),
@@ -110,6 +114,9 @@ public static class Theme
             new Vector4(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f));
 
     private static readonly Dictionary<string, ThemeEntry> ByKey = Entries.ToDictionary(e => e.Key);
+
+    /// <summary>Flips twice a second; used to make tabs and title bars blink.</summary>
+    public static bool BlinkOn => (Environment.TickCount64 / 500) % 2 == 0;
 
     /// <summary>The color used when the user hasn't overridden this entry.</summary>
     public static Vector4 Default(ThemeEntry e) =>

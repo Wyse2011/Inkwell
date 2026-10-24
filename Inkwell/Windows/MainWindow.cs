@@ -16,6 +16,7 @@ public sealed class MainWindow : Window
     private readonly Plugin plugin;
     private readonly Configuration config;
     private ThemePush windowTheme;
+    private int blinkPushes;
 
     private int? openRenameFor;
     private int? openCloseFor;
@@ -49,8 +50,31 @@ public sealed class MainWindow : Window
 
     private PadManager Pads => plugin.Pads;
 
-    public override void PreDraw() => windowTheme = Theme.Push(config, ThemeScope.Window);
-    public override void PostDraw() => windowTheme.Dispose();
+    public override void PreDraw()
+    {
+        windowTheme = Theme.Push(config, ThemeScope.Window);
+
+        // Blink the title bar while any tab here has unread messages.
+        var unread = Pads.Pads.Any(p => !p.Detached && Pads.View(p).HasUnread);
+        blinkPushes = unread && Theme.BlinkOn ? PushTitleBlink(config) : 0;
+    }
+
+    public override void PostDraw()
+    {
+        if (blinkPushes > 0) ImGui.PopStyleColor(blinkPushes);
+        windowTheme.Dispose();
+    }
+
+    /// <summary>Pushes the blink color onto the title bar. Returns how many colors were pushed.</summary>
+    internal static int PushTitleBlink(Configuration config)
+    {
+        var c = Theme.Accent(config, "notify.blink");
+        ImGui.PushStyleColor(ImGuiCol.TitleBg, c);
+        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, c);
+        ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, c);
+        return 3;
+    }
+
 
     public override void Draw()
     {
@@ -111,7 +135,13 @@ public sealed class MainWindow : Window
         var open = true;
         var flags = select ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None;
 
-        var visible = ImGui.BeginTabItem($"{pad.Name}###inkwell-tab-{pad.Id}", ref open, flags);
+        // Unread tabs blink.
+        var blink = Pads.View(pad).HasUnread && Theme.BlinkOn;
+        var blinkColor = Theme.Accent(config, "notify.blink");
+        bool visible;
+        using (ImRaii.PushColor(ImGuiCol.Tab, blinkColor, blink))
+        using (ImRaii.PushColor(ImGuiCol.TabHovered, blinkColor, blink))
+            visible = ImGui.BeginTabItem($"{pad.Name}###inkwell-tab-{pad.Id}", ref open, flags);
 
         // Remember which tab is being dragged; HandleTabTearOff decides what happens on release.
         if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))

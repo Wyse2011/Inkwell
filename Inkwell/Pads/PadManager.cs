@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
+using Inkwell.Snoop;
 using Inkwell.Windows;
 
 namespace Inkwell.Pads;
@@ -136,6 +137,13 @@ public sealed class PadManager : IDisposable
     {
         saveQueued = true;
         saveAt = DateTime.Now.AddSeconds(1.5);
+    }
+
+    /// <summary>A new chat line arrived; let every pad decide whether it cares.</summary>
+    public void OnLogEntry(LogEntry entry)
+    {
+        foreach (var view in views.Values)
+            view.OnLogEntry(entry);
     }
 
     public void NotifySettingsChanged()

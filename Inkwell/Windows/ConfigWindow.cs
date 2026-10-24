@@ -59,6 +59,35 @@ public sealed class ConfigWindow : Window
             }
         }
 
+        if (ImGui.CollapsingHeader("Chat log (Snooper features)", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            ImGui.TextDisabled("Add people to a pad with + Target to see what they say above your text.");
+            ImGui.TextUnformatted("Channels to show:");
+            changed |= ImGui.Checkbox("Say", ref config.LogSay);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Emotes", ref config.LogEmotes);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Yell / Shout", ref config.LogYellShout);
+            changed |= ImGui.Checkbox("Party / Alliance", ref config.LogParty);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Free Company", ref config.LogFreeCompany);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Linkshells", ref config.LogLinkshells);
+            changed |= ImGui.Checkbox("Incoming tells", ref config.LogTells);
+
+            ImGui.Spacing();
+            changed |= ImGui.Checkbox("Include my own messages (to follow the whole conversation)", ref config.LogIncludeSelf);
+            changed |= ImGui.Checkbox("Show times", ref config.LogTimestamps);
+            changed |= ImGui.Checkbox("Show the chunk preview under the chat log", ref config.ShowChunkPreview);
+            changed |= ImGui.Checkbox("Only alert when I'm not looking at that pad", ref config.NotifyOnlyWhenUnfocused);
+            ImGui.TextDisabled("Blink and sound are set per pad with the Alerts button.");
+
+            if (ImGui.Button("Clear chat history"))
+                plugin.ChatLog.Clear();
+            ImGui.SameLine();
+            ImGui.TextDisabled("History is kept only until you close the game.");
+        }
+
         if (ImGui.CollapsingHeader("Text size", ImGuiTreeNodeFlags.DefaultOpen))
         {
             changed |= ImGui.Checkbox("Use a custom text size", ref config.CustomTextSize);
@@ -67,7 +96,7 @@ public sealed class ConfigWindow : Window
                 ImGui.SetNextItemWidth(200);
                 changed |= ImGui.SliderFloat("Text size", ref config.TextSize,
                     Inkwell.Fonts.TextFont.MinSize, Inkwell.Fonts.TextFont.MaxSize, "%.0f");
-                changed |= ImGui.Checkbox("Also use it in the chunk preview", ref config.TextSizeInPreview);
+                changed |= ImGui.Checkbox("Also use it in the chunk preview and chat log", ref config.TextSizeInPreview);
             }
             ImGui.TextDisabled("Tip: hold Ctrl and scroll the mouse wheel over the text box.");
         }
