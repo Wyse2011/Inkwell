@@ -40,7 +40,11 @@ Quality-of-life changes on top of the Wordsmith-style workflow:
   **+ Target** (or by name), or turn on **Follow target**, and everything they say (say, emotes,
   yells, party, FC, linkshells, tells) appears above your text, colored by channel, with your
   own lines included if you like. Each pad has its own list of people, so one pad can follow
-  your scene partner while another follows your party.
+  your scene partner while another follows your party. Each person gets their own color
+  (chosen automatically, or pick one with the swatch on their tag), and a small gap separates
+  different speakers, so busy scenes are easy to follow.
+  Earlier messages are pulled in from the game's own chat log (everything since you logged
+  in), and you can optionally have Inkwell remember history between sessions.
 - **New-message alerts.** Per pad, the tab or window title blinks and/or a game sound
   (`<se.1>` to `<se.16>`) plays when someone in that pad posts, optionally only when you're not
   already looking at it.

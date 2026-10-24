@@ -10,6 +10,7 @@ public sealed class ConfigWindow : Window
 {
     private readonly Plugin plugin;
     private readonly Configuration config;
+    private string importResult = string.Empty;
 
     public ConfigWindow(Plugin plugin) : base("Inkwell Settings###inkwell-config")
     {
@@ -78,14 +79,50 @@ public sealed class ConfigWindow : Window
             ImGui.Spacing();
             changed |= ImGui.Checkbox("Include my own messages (to follow the whole conversation)", ref config.LogIncludeSelf);
             changed |= ImGui.Checkbox("Show times", ref config.LogTimestamps);
+            changed |= ImGui.Checkbox("Give each person their own color", ref config.LogColorByPerson);
+            using (ImRaii.Disabled(!config.LogColorByPerson))
+            {
+                ImGui.Indent();
+                changed |= ImGui.Checkbox("Color their whole line (instead of just the name)", ref config.LogWholeLineByPerson);
+                if (ImGui.Button("Reset picked person colors"))
+                {
+                    config.PersonColors.Clear();
+                    changed = true;
+                }
+                ImGui.TextDisabled("Pick someone's color with the swatch on their tag in a pad.");
+                ImGui.Unindent();
+            }
+            changed |= ImGui.Checkbox("Leave a small gap when the speaker changes", ref config.LogSpaceBetweenSpeakers);
             changed |= ImGui.Checkbox("Show the chunk preview under the chat log", ref config.ShowChunkPreview);
             changed |= ImGui.Checkbox("Only alert when I'm not looking at that pad", ref config.NotifyOnlyWhenUnfocused);
             ImGui.TextDisabled("Blink and sound are set per pad with the Alerts button.");
 
+            ImGui.Spacing();
+            ImGui.TextUnformatted("History:");
+            changed |= ImGui.Checkbox("Pull in earlier messages from the game's chat log when Inkwell starts", ref config.LogImportOnStart);
+            if (ImGui.Button("Import from game chat log now"))
+            {
+                var added = plugin.ChatLog.ImportFromGame();
+                importResult = added > 0 ? $"Added {added} earlier message(s)." : "Nothing new to add.";
+            }
+            if (importResult.Length > 0)
+            {
+                ImGui.SameLine();
+                ImGui.TextDisabled(importResult);
+            }
+            ImGui.TextDisabled("The game keeps everything said since you logged in.");
+
+            changed |= ImGui.Checkbox("Remember chat history between sessions (saved on this PC)", ref config.LogRememberHistory);
+            ImGui.SetNextItemWidth(200);
+            changed |= ImGui.SliderInt("Messages to keep", ref config.LogMaxEntries, 500, 50000);
+
             if (ImGui.Button("Clear chat history"))
+            {
                 plugin.ChatLog.Clear();
+                importResult = string.Empty;
+            }
             ImGui.SameLine();
-            ImGui.TextDisabled("History is kept only until you close the game.");
+            ImGui.TextDisabled($"{plugin.ChatLog.Count} message(s) stored. Clearing also deletes the saved file.");
         }
 
         if (ImGui.CollapsingHeader("Text size", ImGuiTreeNodeFlags.DefaultOpen))

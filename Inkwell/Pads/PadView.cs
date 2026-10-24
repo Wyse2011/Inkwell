@@ -724,19 +724,37 @@ public sealed class PadView
         var padX = ImGui.GetStyle().FramePadding.X * 2;
         var first = true;
 
+        var swatch = ImGui.GetFrameHeight();
         for (int i = 0; i < pad.Watched.Count; i++)
         {
-            var label = $"{pad.Watched[i]}  x";
-            FlowSameLine(ref first, ImGui.CalcTextSize(label).X + padX, right);
-            if (ImGui.SmallButton($"{label}##watch{i}"))
+            var name = pad.Watched[i];
+            var label = $"{name}  x";
+            FlowSameLine(ref first, swatch + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize(label).X + padX, right);
+
+            // Color swatch: click to pick this person's color.
+            var color = PersonColors.For(config, name);
+            if (ImGui.ColorEdit4($"##personcolor{i}", ref color,
+                    ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel | ImGuiColorEditFlags.NoAlpha))
             {
-                SetStatus($"Stopped showing {pad.Watched[i]}.", false);
+                PersonColors.Set(config, name, color);
+                manager.QueueSave();
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip($"{name}'s color in the chat log. Click to change.");
+
+            ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+            bool remove;
+            using (ImRaii.PushColor(ImGuiCol.Text, color, config.LogColorByPerson))
+                remove = ImGui.SmallButton($"{label}##watch{i}");
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Click to remove from this pad.");
+            if (remove)
+            {
+                SetStatus($"Stopped showing {name}.", false);
                 pad.Watched.RemoveAt(i);
                 manager.QueueSave();
                 break;
             }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Click to remove from this pad.");
         }
 
         if (following != null && !pad.Watched.Contains(following, StringComparer.OrdinalIgnoreCase))
@@ -812,12 +830,45 @@ public sealed class PadView
         if (lines.Count == 0)
             ImGui.TextColored(Dim, $"Nothing yet from {string.Join(", ", names)}.");
 
+        string? previousSpeaker = null;
+        var segments = new List<(string Text, Vector4 Color)>(3);
+
         foreach (var e in lines)
         {
-            var time = config.LogTimestamps ? $"[{e.Time:HH:mm}] " : "";
-            var body = e.NameInText ? e.Text : e.IsEmote ? $"{e.Name} {e.Text}" : $"{e.Name}: {e.Text}";
-            using (ImRaii.PushColor(ImGuiCol.Text, Theme.Accent(config, e.ColorKey)))
-                ImGui.TextWrapped(time + body);
+            // A little breathing room whenever someone else starts talking.
+            var speaker = e.IsSelf ? "\u0001you" : e.Name.ToLowerInvariant();
+            if (config.LogSpaceBetweenSpeakers && previousSpeaker != null && speaker != previousSpeaker)
+                ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeight() * 0.35f));
+            previousSpeaker = speaker;
+
+            var channelColor = Theme.Accent(config, e.ColorKey);
+            var personColor = config.LogColorByPerson ? PersonColors.For(config, e) : channelColor;
+            var textColor = config.LogColorByPerson && config.LogWholeLineByPerson ? personColor : channelColor;
+
+            segments.Clear();
+            if (config.LogTimestamps)
+                segments.Add(($"[{e.Time:HH:mm}]", Dim));
+
+            if (e.NameInText)
+            {
+                // Standard emotes ("Bob Smith waves.") already start with the name.
+                if (e.Text.StartsWith(e.Name, StringComparison.OrdinalIgnoreCase) && e.Name.Length > 0)
+                {
+                    segments.Add((e.Text[..e.Name.Length], personColor));
+                    segments.Add((e.Text[e.Name.Length..], textColor));
+                }
+                else
+                {
+                    segments.Add((e.Text, textColor));
+                }
+            }
+            else
+            {
+                segments.Add((e.IsEmote ? e.Name : e.Name + ":", personColor));
+                segments.Add((e.Text, textColor));
+            }
+
+            DrawColoredLine(segments);
         }
 
         // Follow new lines, unless you've scrolled up to read something older.
@@ -828,6 +879,42 @@ public sealed class PadView
             lastLogEntry = newest;
         }
         logAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 4f;
+    }
+
+    /// <summary>
+    /// Word-wrapped text made of differently colored parts (name in one color, message in
+    /// another). Wrapped lines start back at the left edge, like normal text.
+    /// </summary>
+    private static void DrawColoredLine(List<(string Text, Vector4 Color)> segments)
+    {
+        var spaceWidth = ImGui.CalcTextSize(" ").X;
+        var right = ImGui.GetCursorScreenPos().X + ImGui.GetContentRegionAvail().X;
+        var first = true;
+
+        foreach (var (text, color) in segments)
+        {
+            var glueToPrevious = text.Length > 0 && !char.IsWhiteSpace(text[0]) && !first && text[0] is '.' or ',' or '!' or '?' or '\'' or '’';
+            var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            using var _ = ImRaii.PushColor(ImGuiCol.Text, color);
+            for (int w = 0; w < words.Length; w++)
+            {
+                var word = words[w];
+                var width = ImGui.CalcTextSize(word).X;
+                if (!first)
+                {
+                    // "Bob Smith" + "'s hat" or "waves." shouldn't get a space inserted.
+                    var gap = w == 0 && glueToPrevious ? 0f : spaceWidth;
+                    ImGui.SameLine(0, gap);
+                    if (ImGui.GetCursorScreenPos().X + width > right)
+                        ImGui.NewLine();
+                }
+                first = false;
+                ImGui.TextUnformatted(word);
+            }
+        }
+
+        if (first) ImGui.NewLine(); // Nothing drawn; still take up a line.
     }
 
     /// <summary>Called for every new chat line; blinks and/or beeps if it's from someone here.</summary>

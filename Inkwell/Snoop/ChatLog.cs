@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Dalamud.Game.Chat;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace Inkwell.Snoop;
 
@@ -19,18 +22,31 @@ public sealed record LogEntry(
 /// <summary>
 /// Listens to the game's chat and keeps recent lines from players, so a pad can show everything
 /// the people it watches have said, including lines from before they were added.
-/// Nothing is saved to disk; history starts fresh each session.
+///
+/// History comes from three places: lines that arrive while Inkwell is running, lines imported
+/// from the game's own chat log (everything since you logged in), and, if you turn it on, a file
+/// Inkwell saves so history survives restarting the game.
 /// </summary>
-public sealed class ChatLog : IDisposable
+public sealed unsafe class ChatLog : IDisposable
 {
     private readonly Configuration config;
     private readonly List<LogEntry> entries = new();
     private readonly object gate = new();
+    private readonly string historyFile;
+    private bool unsaved;
+    private DateTime lastSave = DateTime.Now;
 
     public ChatLog(Configuration config)
     {
         this.config = config;
+        historyFile = Path.Combine(Plugin.PluginInterface.ConfigDirectory.FullName, "chat-history.json");
+
+        if (config.LogRememberHistory) LoadHistory();
         Plugin.ChatGui.ChatMessage += OnChatMessage;
+        Plugin.Framework.Update += OnFrameworkUpdate;
+
+        if (config.LogImportOnStart)
+            Plugin.Framework.RunOnFrameworkThread(() => ImportFromGame());
     }
 
     /// <summary>Raised (on the game thread) for every line that was stored.</summary>
@@ -53,9 +69,151 @@ public sealed class ChatLog : IDisposable
         }
     }
 
+    public int Count
+    {
+        get { lock (gate) return entries.Count; }
+    }
+
+    /// <summary>Forgets all history, including the saved file.</summary>
     public void Clear()
     {
         lock (gate) entries.Clear();
+        unsaved = false;
+        try
+        {
+            if (File.Exists(historyFile)) File.Delete(historyFile);
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Inkwell: couldn't delete saved chat history");
+        }
+    }
+
+    // ------------------------------------------------------------------ import from the game
+
+    /// <summary>
+    /// Reads everything in the game's chat log (all lines since you logged in) and adds any lines
+    /// Inkwell doesn't already have. Must run on the game thread. Returns how many were added.
+    /// </summary>
+    public int ImportFromGame()
+    {
+        var added = new List<LogEntry>();
+        try
+        {
+            var module = RaptureLogModule.Instance();
+            if (module == null) return 0;
+
+            // The game's log is a list we can read by index; it says "false" past the end.
+            for (int i = 0; i < 100_000; i++)
+            {
+                if (!module->GetLogMessageDetail(i, out var senderBytes, out var messageBytes,
+                        out var logKind, out _, out _, out var time))
+                    break;
+
+                var when = DateTimeOffset.FromUnixTimeSeconds(time).LocalDateTime;
+                if (TryMakeEntry((XivChatType)logKind, SeString.Parse(senderBytes), SeString.Parse(messageBytes), when, out var entry))
+                    added.Add(entry);
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error(ex, "Inkwell: couldn't read the game's chat log");
+        }
+
+        return Merge(added);
+    }
+
+    /// <summary>Adds entries that aren't already known (same person, same text, within a few seconds).</summary>
+    private int Merge(List<LogEntry> incoming)
+    {
+        if (incoming.Count == 0) return 0;
+
+        lock (gate)
+        {
+            var known = new Dictionary<string, List<DateTime>>();
+            foreach (var e in entries)
+            {
+                var key = Key(e);
+                if (!known.TryGetValue(key, out var times)) known[key] = times = new List<DateTime>();
+                times.Add(e.Time);
+            }
+
+            int count = 0;
+            foreach (var e in incoming)
+            {
+                var key = Key(e);
+                if (known.TryGetValue(key, out var times) && times.Any(t => Math.Abs((t - e.Time).TotalSeconds) <= 5))
+                    continue;
+                entries.Add(e);
+                if (!known.TryGetValue(key, out times)) known[key] = times = new List<DateTime>();
+                times.Add(e.Time);
+                count++;
+            }
+
+            if (count > 0)
+            {
+                entries.Sort((a, b) => a.Time.CompareTo(b.Time));
+                Trim();
+                unsaved = true;
+            }
+            return count;
+        }
+    }
+
+    private static string Key(LogEntry e) => $"{e.Name.ToLowerInvariant()}\u0001{e.Text}";
+
+    private void Trim()
+    {
+        var overflow = entries.Count - Math.Max(500, config.LogMaxEntries);
+        if (overflow > 0) entries.RemoveRange(0, overflow);
+    }
+
+    // ------------------------------------------------------------------ saved history
+
+    private void LoadHistory()
+    {
+        try
+        {
+            if (!File.Exists(historyFile)) return;
+            var saved = JsonSerializer.Deserialize<List<LogEntry>>(File.ReadAllText(historyFile));
+            if (saved == null) return;
+            lock (gate)
+            {
+                entries.AddRange(saved);
+                entries.Sort((a, b) => a.Time.CompareTo(b.Time));
+                Trim();
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Inkwell: couldn't load saved chat history");
+        }
+    }
+
+    public void SaveHistory()
+    {
+        if (!config.LogRememberHistory || !unsaved) return;
+        try
+        {
+            string json;
+            lock (gate) json = JsonSerializer.Serialize(entries);
+            File.WriteAllText(historyFile, json);
+            unsaved = false;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning(ex, "Inkwell: couldn't save chat history");
+        }
+    }
+
+    private void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework framework)
+    {
+        // Save at most once a minute while there's something new.
+        if (unsaved && config.LogRememberHistory && (DateTime.Now - lastSave).TotalSeconds > 60)
+        {
+            lastSave = DateTime.Now;
+            SaveHistory();
+        }
     }
 
     // Dalamud API 15+: chat events pass a single message object (type, sender, text).
@@ -63,34 +221,14 @@ public sealed class ChatLog : IDisposable
     {
         try
         {
-            var type = chat.LogKind;
-            var sender = chat.Sender;
-            var message = chat.Message;
-
-            var channel = Classify(type);
-            if (channel == null || !IsChannelLogged(channel.Value.Group)) return;
-
-            // Players are identified by the link payload on their name. Your own lines have none.
-            var player = sender.Payloads.OfType<PlayerPayload>().FirstOrDefault();
-            var isStandardEmote = type == XivChatType.StandardEmote;
-            if (player == null && isStandardEmote)
-                player = message.Payloads.OfType<PlayerPayload>().FirstOrDefault();
-
-            var isSelf = player == null;
-            var name = player?.PlayerName ?? CleanName(sender.TextValue);
-            if (string.IsNullOrWhiteSpace(name) && !isStandardEmote) return;
-
-            var text = message.TextValue.Trim();
-            if (text.Length == 0) return;
-
-            var entry = new LogEntry(DateTime.Now, name.Trim(), text, channel.Value.ColorKey,
-                channel.Value.Group == ChannelGroup.Emote, isStandardEmote, isSelf);
+            if (!TryMakeEntry(chat.LogKind, chat.Sender, chat.Message, DateTime.Now, out var entry))
+                return;
 
             lock (gate)
             {
                 entries.Add(entry);
-                var overflow = entries.Count - Math.Max(500, config.LogMaxEntries);
-                if (overflow > 0) entries.RemoveRange(0, overflow);
+                Trim();
+                unsaved = true;
             }
 
             EntryAdded?.Invoke(entry);
@@ -99,6 +237,31 @@ public sealed class ChatLog : IDisposable
         {
             Plugin.Log.Error(ex, "Inkwell: failed to read a chat message");
         }
+    }
+
+    /// <summary>Turns a chat line into a log entry, if it's a player line on a channel we keep.</summary>
+    private bool TryMakeEntry(XivChatType type, SeString sender, SeString message, DateTime time, out LogEntry entry)
+    {
+        entry = null!;
+        var channel = Classify(type);
+        if (channel == null || !IsChannelLogged(channel.Value.Group)) return false;
+
+        // Players are identified by the link payload on their name. Your own lines have none.
+        var player = sender.Payloads.OfType<PlayerPayload>().FirstOrDefault();
+        var isStandardEmote = type == XivChatType.StandardEmote;
+        if (player == null && isStandardEmote)
+            player = message.Payloads.OfType<PlayerPayload>().FirstOrDefault();
+
+        var isSelf = player == null;
+        var name = player?.PlayerName ?? CleanName(sender.TextValue);
+        if (string.IsNullOrWhiteSpace(name) && !isStandardEmote) return false;
+
+        var text = message.TextValue.Trim();
+        if (text.Length == 0) return false;
+
+        entry = new LogEntry(time, name.Trim(), text, channel.Value.ColorKey,
+            channel.Value.Group == ChannelGroup.Emote, isStandardEmote, isSelf);
+        return true;
     }
 
     private enum ChannelGroup { Say, Emote, YellShout, Party, FreeCompany, Linkshell, Tell }
@@ -140,5 +303,10 @@ public sealed class ChatLog : IDisposable
         return new string(chars).Trim();
     }
 
-    public void Dispose() => Plugin.ChatGui.ChatMessage -= OnChatMessage;
+    public void Dispose()
+    {
+        Plugin.ChatGui.ChatMessage -= OnChatMessage;
+        Plugin.Framework.Update -= OnFrameworkUpdate;
+        SaveHistory();
+    }
 }

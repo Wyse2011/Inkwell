@@ -94,6 +94,10 @@ public static class Theme
         Channel("channel.yell", "Yell", 0xFFFF00),
         Channel("channel.shout", "Shout", 0xFFA666),
 
+        // ---- Chat log ----
+        new("log.self", "My own lines (names)", "Chat log", ThemeScope.Accent,
+            Array.Empty<ImGuiCol>(), new Vector4(0.85f, 0.85f, 0.85f, 1f)),
+
         // ---- Notifications ----
         new("notify.blink", "Blink color (new messages)", "Notifications", ThemeScope.Accent,
             Array.Empty<ImGuiCol>(), new Vector4(1f, 0.6f, 0.15f, 1f)),

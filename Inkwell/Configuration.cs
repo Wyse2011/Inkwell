@@ -48,6 +48,8 @@ public class Configuration : IPluginConfiguration
     public bool LogIncludeSelf = true;
     public bool LogTimestamps = true;
     public int LogMaxEntries = 5000;
+    public bool LogImportOnStart = true;
+    public bool LogRememberHistory = false;
     public bool LogSay = true;
     public bool LogEmotes = true;
     public bool LogYellShout = true;
@@ -56,6 +58,11 @@ public class Configuration : IPluginConfiguration
     public bool LogLinkshells = false;
     public bool LogTells = true;
     public bool NotifyOnlyWhenUnfocused = true;
+    public bool LogColorByPerson = true;
+    public bool LogWholeLineByPerson = false;
+    public bool LogSpaceBetweenSpeakers = true;
+    /// <summary>Colors you've picked for people (lowercase name). Others are chosen automatically.</summary>
+    public Dictionary<string, Vector4> PersonColors = new();
 
     // ---- Text size ----
     public bool CustomTextSize = false;
