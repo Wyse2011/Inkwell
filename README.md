@@ -45,6 +45,8 @@ Quality-of-life changes on top of the Wordsmith-style workflow:
   different speakers, so busy scenes are easy to follow.
   Earlier messages are pulled in from the game's own chat log (everything since you logged
   in), and you can optionally have Inkwell remember history between sessions.
+  Export any pad's chat log to a Markdown (.md) or plain text (.txt) file with the
+  **Export...** button above the log.
 - **New-message alerts.** Per pad, the tab or window title blinks and/or a game sound
   (`<se.1>` to `<se.16>`) plays when someone in that pad posts, optionally only when you're not
   already looking at it.

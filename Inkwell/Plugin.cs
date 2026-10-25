@@ -1,5 +1,6 @@
 using System.IO;
 using Dalamud.Game.Command;
+using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -29,6 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     public TextFont TextFont { get; }
     public ChatLog ChatLog { get; }
     public WindowSystem WindowSystem { get; } = new("Inkwell");
+    public FileDialogManager FileDialogs { get; } = new();
     public MainWindow MainWindow { get; }
     public PadManager Pads { get; }
     public ConfigWindow ConfigWindow { get; }
@@ -86,6 +88,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         Pads.Update();          // Apply queued tab/window changes before anything draws.
         WindowSystem.Draw();
+        FileDialogs.Draw();     // Save dialogs (chat log export).
     }
 
     private void OnCommand(string command, string args)

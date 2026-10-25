@@ -5,6 +5,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Inkwell.Chat;
+using System.IO;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Inkwell.Fonts;
 using Inkwell.Snoop;
@@ -725,6 +726,24 @@ public sealed class PadView
         var first = true;
 
         var swatch = ImGui.GetFrameHeight();
+
+        // Your own color, when your lines are included in the log.
+        if (config.LogIncludeSelf)
+        {
+            FlowSameLine(ref first, swatch + ImGui.GetStyle().ItemInnerSpacing.X + ImGui.CalcTextSize("You").X, right);
+            var me = Theme.Accent(config, "log.self");
+            if (ImGui.ColorEdit4("##mycolor", ref me,
+                    ImGuiColorEditFlags.NoInputs | ImGuiColorEditFlags.NoLabel | ImGuiColorEditFlags.NoAlpha))
+            {
+                config.ThemeOverrides["log.self"] = me;
+                manager.QueueSave();
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Your color in the chat log. Click to change.");
+            ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+            ImGui.TextColored(me, "You");
+        }
+
         for (int i = 0; i < pad.Watched.Count; i++)
         {
             var name = pad.Watched[i];
@@ -815,6 +834,20 @@ public sealed class PadView
 
     private void DrawLogPanel(float height)
     {
+        // Header row: title on the left, Export on the right.
+        ImGui.TextColored(Dim, "Chat log");
+        const string exportLabel = "Export...";
+        var exportWidth = ImGui.CalcTextSize(exportLabel).X + ImGui.GetStyle().FramePadding.X * 2;
+        ImGui.SameLine();
+        var free = ImGui.GetContentRegionAvail().X;
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0, free - exportWidth));
+        if (ImGui.SmallButton(exportLabel))
+            ImGui.OpenPopup("##exportlog");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Save this pad's chat log to a file.");
+        DrawExportPopup();
+
+        height = MathF.Max(MinPreviewHeight / 2, height - ImGui.GetTextLineHeightWithSpacing());
         using var child = ImRaii.Child("##chatlog", new Vector2(0, height), true);
         if (!child) return;
         using var font = config.TextSizeInPreview ? plugin.TextFont.Push() : null;
@@ -879,6 +912,47 @@ public sealed class PadView
             lastLogEntry = newest;
         }
         logAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 4f;
+    }
+
+    private void DrawExportPopup()
+    {
+        using var popup = ImRaii.Popup("##exportlog");
+        if (!popup) return;
+
+        ImGui.TextUnformatted("Export as:");
+        if (ImGui.Selectable("Markdown (.md)")) StartExport(markdown: true);
+        if (ImGui.Selectable("Plain text (.txt)")) StartExport(markdown: false);
+    }
+
+    private void StartExport(bool markdown)
+    {
+        var lines = plugin.ChatLog.For(WatchedNames(), config.LogIncludeSelf, int.MaxValue);
+        if (lines.Count == 0)
+        {
+            SetStatus("There's nothing in this pad's chat log to export yet.", true);
+            return;
+        }
+
+        // Build the text now, so the file matches what you saw when you clicked Export.
+        var content = LogExporter.Build(lines, pad.Name, markdown);
+        var extension = markdown ? ".md" : ".txt";
+
+        plugin.FileDialogs.SaveFileDialog("Export chat log", extension, LogExporter.DefaultFileName(pad.Name), extension,
+            (ok, path) =>
+            {
+                if (!ok || string.IsNullOrEmpty(path)) return;
+                try
+                {
+                    if (!path.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) path += extension;
+                    File.WriteAllText(path, content);
+                    SetStatus($"Exported {lines.Count} message(s) to {Path.GetFileName(path)}.", false);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.Error(ex, "Inkwell: chat log export failed");
+                    SetStatus("Couldn't save the file. Try a different folder.", true);
+                }
+            });
     }
 
     /// <summary>
