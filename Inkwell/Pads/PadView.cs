@@ -115,6 +115,7 @@ public sealed class PadView
 
         RebuildChunksIfNeeded();
         DrawToolbar();
+        DrawGposeNotice();
         DrawPeopleBar();
         DrawStatus();
         DrawSpellBar();
@@ -180,9 +181,12 @@ public sealed class PadView
                 foreach (var i in ChatHeaders.DisplayOrder)
                 {
                     var color = ChannelColor(i);
-                    using (ImRaii.PushColor(ImGuiCol.Text, color ?? Vector4.Zero, color != null))
+                    var blocked = Plugin.InGpose && !ChatHeaders.WorksInGpose(i, config);
+                    var itemColor = blocked ? Dim : color;
+                    var itemLabel = blocked ? $"{headers[i].Name} (not in GPose)" : headers[i].Name;
+                    using (ImRaii.PushColor(ImGuiCol.Text, itemColor ?? Vector4.Zero, itemColor != null))
                     {
-                        if (ImGui.Selectable(headers[i].Name, i == idx))
+                        if (ImGui.Selectable($"{itemLabel}###header{i}", i == idx))
                         {
                             pad.HeaderIndex = i;
                             pad.RevertHeaderIndex = null;   // A manual pick is the new normal.
@@ -291,7 +295,8 @@ public sealed class PadView
         var sendColor = warn ? Theme.Accent(config, "copy.warn") : Theme.Accent(config, "send");
         var sendHover = warn ? Theme.Accent(config, "copy.warn.hover") : Theme.Accent(config, "send.hover");
 
-        using (ImRaii.Disabled(!hasChunks || sending || cooling))
+        var gposeBlocked = Plugin.InGpose && !ChatHeaders.WorksInGpose(pad.HeaderIndex, config);
+        using (ImRaii.Disabled(!hasChunks || sending || cooling || gposeBlocked))
         using (ImRaii.PushColor(ImGuiCol.Button, sendColor))
         using (ImRaii.PushColor(ImGuiCol.ButtonHovered, sendHover))
         {
@@ -299,9 +304,11 @@ public sealed class PadView
                 OnSendClicked(warn, confirming);
         }
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip(warn
-                ? $"{errors} possible spelling error(s).\nSends the next chunk to chat. One click = one message."
-                : "Sends the next chunk to chat. One click = one message.");
+            ImGui.SetTooltip(gposeBlocked
+                ? $"{ChatHeaders.All[pad.HeaderIndex].Name} doesn't work in GPose.\nPick another channel, or Copy and paste it after GPose."
+                : warn
+                    ? $"{errors} possible spelling error(s).\nSends the next chunk to chat. One click = one message."
+                    : "Sends the next chunk to chat. One click = one message.");
     }
 
     private void OnSendClicked(bool hasErrors, bool confirming)
@@ -313,6 +320,12 @@ public sealed class PadView
             return;
         }
         confirmSendUntil = DateTime.MinValue;
+
+        if (Plugin.InGpose && !ChatHeaders.WorksInGpose(pad.HeaderIndex, config))
+        {
+            SetStatus($"{ChatHeaders.All[pad.HeaderIndex].Name} doesn't work in GPose. Pick another channel or use Copy.", true);
+            return;
+        }
 
         if (!Plugin.ClientState.IsLoggedIn)
         {
@@ -912,6 +925,22 @@ public sealed class PadView
             lastLogEntry = newest;
         }
         logAtBottom = ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 4f;
+    }
+
+    /// <summary>A short notice while in GPose, saying whether this pad's channel still works.</summary>
+    private void DrawGposeNotice()
+    {
+        if (!Plugin.InGpose) return;
+
+        if (ChatHeaders.WorksInGpose(pad.HeaderIndex, config))
+        {
+            ImGui.TextColored(Dim, "In GPose: channels that don't work here are greyed out.");
+            return;
+        }
+
+        var name = ChatHeaders.All[Math.Clamp(pad.HeaderIndex, 0, ChatHeaders.All.Length - 1)].Name;
+        ImGui.TextColored(Yellow, $"In GPose: {name} doesn't work here, so Send is paused.");
+        ImGui.TextColored(Dim, "Pick another channel, or Copy now and paste after GPose.");
     }
 
     private void DrawExportPopup()

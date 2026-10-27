@@ -55,6 +55,7 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "Open Inkwell. \"/inkwell new\" adds a pad, \"/inkwell config\" opens settings.",
         });
 
+        ApplyUiSettings();
         PluginInterface.UiBuilder.Draw += DrawUi;
         PluginInterface.UiBuilder.OpenMainUi += MainWindow.Toggle;
         PluginInterface.UiBuilder.OpenConfigUi += ConfigWindow.Toggle;
@@ -82,6 +83,16 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         Log.Warning($"Inkwell: no dictionary found. Looked in: {string.Join(", ", candidates)}");
+    }
+
+    /// <summary>True while the player is in GPose.</summary>
+    public static bool InGpose => ClientState.IsGPosing;
+
+    /// <summary>Applies settings that change how Dalamud treats Inkwell's windows.</summary>
+    public void ApplyUiSettings()
+    {
+        // Dalamud hides plugin windows in GPose unless a plugin opts out.
+        PluginInterface.UiBuilder.DisableGposeUiHide = Configuration.ShowInGpose;
     }
 
     private void DrawUi()

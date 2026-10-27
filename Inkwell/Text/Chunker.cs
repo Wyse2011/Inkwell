@@ -112,6 +112,20 @@ public static class ChatHeaders
         return list.ToArray();
     }
 
+    /// <summary>Whether a channel can still be sent to while in GPose (per your settings).</summary>
+    public static bool WorksInGpose(int headerIndex, Configuration cfg) => headerIndex switch
+    {
+        0 => cfg.GposeAllowSay,
+        TellIndex or ReplyIndex => cfg.GposeAllowTell,
+        EmoteIndex => cfg.GposeAllowEmote,
+        3 or 5 => cfg.GposeAllowParty,                 // Party, Alliance
+        4 => cfg.GposeAllowFreeCompany,
+        6 or 7 => cfg.GposeAllowYellShout,
+        >= 8 and <= 23 => cfg.GposeAllowLinkshells,    // Linkshells and cross-world linkshells
+        NoneIndex => cfg.GposeAllowNoHeader,
+        _ => true,
+    };
+
     public static string Resolve(int headerIndex, string tellTarget)
     {
         var idx = Math.Clamp(headerIndex, 0, All.Length - 1);

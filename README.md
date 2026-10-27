@@ -66,6 +66,10 @@ Quality-of-life changes on top of the Wordsmith-style workflow:
   adjustable in Appearance.
 - **Reply channel.** Pick **Reply (last tell)** in the channel dropdown, or type `/r `, to send
   your post with `/r` to whoever last sent you a tell.
+- **Works in GPose.** Inkwell stays open in GPose, notices when you're in it, greys out
+  channels that don't work there (like Tell and Emote) and pauses Send for them, while
+  channels that still work (like Party) send as normal. Which channels count as working is
+  adjustable in settings.
 - **Resizable text box.** Drag the bar between the chunk preview and the text box to make the
   editor as large as you like. The size is remembered between sessions.
 - **Misspellings highlighted where you type.** Misspelled words are marked directly in the

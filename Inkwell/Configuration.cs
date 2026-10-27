@@ -64,6 +64,19 @@ public class Configuration : IPluginConfiguration
     /// <summary>Colors you've picked for people (lowercase name). Others are chosen automatically.</summary>
     public Dictionary<string, Vector4> PersonColors = new();
 
+    // ---- GPose ----
+    public bool ShowInGpose = true;
+    // Which channels can still send while in GPose. Separate true/false settings (rather than a
+    // list) so saving and loading the config can't duplicate entries.
+    public bool GposeAllowSay = false;
+    public bool GposeAllowEmote = false;
+    public bool GposeAllowTell = false;
+    public bool GposeAllowParty = true;
+    public bool GposeAllowFreeCompany = true;
+    public bool GposeAllowLinkshells = true;
+    public bool GposeAllowYellShout = false;
+    public bool GposeAllowNoHeader = true;
+
     // ---- Text size ----
     public bool CustomTextSize = false;
     public float TextSize = 20f;

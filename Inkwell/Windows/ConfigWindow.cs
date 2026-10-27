@@ -125,6 +125,33 @@ public sealed class ConfigWindow : Window
             ImGui.TextDisabled($"{plugin.ChatLog.Count} message(s) stored. Clearing also deletes the saved file.");
         }
 
+        if (ImGui.CollapsingHeader("GPose"))
+        {
+            if (ImGui.Checkbox("Keep Inkwell open in GPose", ref config.ShowInGpose))
+            {
+                plugin.ApplyUiSettings();
+                changed = true;
+            }
+
+            ImGui.Spacing();
+            ImGui.TextUnformatted("Channels that still work in GPose:");
+            ImGui.TextDisabled("Others are greyed out and Send is paused (Copy still works).");
+            changed |= ImGui.Checkbox("Party / Alliance##gp", ref config.GposeAllowParty);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Free Company##gp", ref config.GposeAllowFreeCompany);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Linkshells / CWLS##gp", ref config.GposeAllowLinkshells);
+            changed |= ImGui.Checkbox("Say##gp", ref config.GposeAllowSay);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Yell / Shout##gp", ref config.GposeAllowYellShout);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("Emote##gp", ref config.GposeAllowEmote);
+            changed |= ImGui.Checkbox("Tell / Reply##gp", ref config.GposeAllowTell);
+            ImGui.SameLine();
+            changed |= ImGui.Checkbox("None (no header)##gp", ref config.GposeAllowNoHeader);
+            ImGui.TextDisabled("If a channel works for you in GPose, tick it here.");
+        }
+
         if (ImGui.CollapsingHeader("Text size", ImGuiTreeNodeFlags.DefaultOpen))
         {
             changed |= ImGui.Checkbox("Use a custom text size", ref config.CustomTextSize);
