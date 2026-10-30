@@ -943,28 +943,119 @@ public sealed class PadView
         ImGui.TextColored(Dim, "Pick another channel, or Copy now and paste after GPose.");
     }
 
+    // People left out of the next export (everyone is included until unticked).
+    private readonly HashSet<string> exportExcluded = new(StringComparer.OrdinalIgnoreCase);
+    private bool exportIncludeMe = true;
+
     private void DrawExportPopup()
     {
         using var popup = ImRaii.Popup("##exportlog");
         if (!popup) return;
 
-        ImGui.TextUnformatted("Export as:");
-        if (ImGui.Selectable("Markdown (.md)")) StartExport(markdown: true);
-        if (ImGui.Selectable("Plain text (.txt)")) StartExport(markdown: false);
-    }
+        var changed = false;
+        ImGui.TextUnformatted($"Export \"{pad.Name}\" chat log");
+        ImGui.Separator();
 
-    private void StartExport(bool markdown)
-    {
-        var lines = plugin.ChatLog.For(WatchedNames(), config.LogIncludeSelf, int.MaxValue);
-        if (lines.Count == 0)
+        // ---- Channels ----
+        ImGui.TextColored(Dim, "Channels");
+        changed |= ImGui.Checkbox("Say", ref config.ExportSay);
+        ImGui.SameLine(150);
+        changed |= ImGui.Checkbox("Custom emotes (/em)", ref config.ExportCustomEmotes);
+        changed |= ImGui.Checkbox("Yell / Shout", ref config.ExportYellShout);
+        ImGui.SameLine(150);
+        changed |= ImGui.Checkbox("Standard emotes (/wave...)", ref config.ExportStandardEmotes);
+        changed |= ImGui.Checkbox("Party / Alliance", ref config.ExportParty);
+        ImGui.SameLine(150);
+        changed |= ImGui.Checkbox("Free Company", ref config.ExportFreeCompany);
+        changed |= ImGui.Checkbox("Linkshells", ref config.ExportLinkshells);
+        ImGui.SameLine(150);
+        changed |= ImGui.Checkbox("Tells", ref config.ExportTells);
+
+        // ---- Time ----
+        ImGui.Spacing();
+        ImGui.TextColored(Dim, "Time");
+        changed |= ImGui.RadioButton("Everything", ref config.ExportTimeMode, 0);
+        ImGui.SameLine();
+        changed |= ImGui.RadioButton("Only the last", ref config.ExportTimeMode, 1);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(110);
+        using (ImRaii.Disabled(config.ExportTimeMode != 1))
+            changed |= ImGui.SliderInt("##exporthours", ref config.ExportHours, 1, 48, "%d hour(s)");
+
+        // ---- People ----
+        ImGui.Spacing();
+        ImGui.TextColored(Dim, "People");
+        ImGui.Checkbox("Me##exportme", ref exportIncludeMe);
+        foreach (var name in WatchedNames().OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
         {
-            SetStatus("There's nothing in this pad's chat log to export yet.", true);
-            return;
+            var include = !exportExcluded.Contains(name);
+            using (ImRaii.PushColor(ImGuiCol.Text, PersonColors.For(config, name), config.LogColorByPerson))
+            {
+                if (ImGui.Checkbox($"{name}##export-{name}", ref include))
+                {
+                    if (include) exportExcluded.Remove(name);
+                    else exportExcluded.Add(name);
+                }
+            }
         }
 
-        // Build the text now, so the file matches what you saw when you clicked Export.
+        if (changed) manager.QueueSave();
+
+        // ---- Result ----
+        var lines = ExportLines();
+        ImGui.Separator();
+        ImGui.TextColored(lines.Count > 0 ? Green : Yellow,
+            lines.Count > 0 ? $"{lines.Count} message(s) will be exported." : "Nothing matches these choices.");
+
+        using (ImRaii.Disabled(lines.Count == 0))
+        {
+            if (ImGui.Button("Save as .md"))
+            {
+                StartExport(lines, markdown: true);
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Save as .txt"))
+            {
+                StartExport(lines, markdown: false);
+                ImGui.CloseCurrentPopup();
+            }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel"))
+            ImGui.CloseCurrentPopup();
+    }
+
+    /// <summary>This pad's log, narrowed down by the export choices.</summary>
+    private List<LogEntry> ExportLines()
+    {
+        var names = WatchedNames();
+        names.RemoveWhere(exportExcluded.Contains);
+
+        var since = config.ExportTimeMode == 1 ? DateTime.Now.AddHours(-config.ExportHours) : DateTime.MinValue;
+        return plugin.ChatLog.For(names, exportIncludeMe, int.MaxValue)
+            .Where(e => e.Time >= since && ExportChannelWanted(e))
+            .ToList();
+    }
+
+    private bool ExportChannelWanted(LogEntry e) => e.ColorKey switch
+    {
+        "channel.say" => config.ExportSay,
+        "channel.emote" => e.NameInText ? config.ExportStandardEmotes : config.ExportCustomEmotes,
+        "channel.yell" or "channel.shout" => config.ExportYellShout,
+        "channel.party" or "channel.alliance" => config.ExportParty,
+        "channel.fc" => config.ExportFreeCompany,
+        "channel.ls" or "channel.cwls" => config.ExportLinkshells,
+        "channel.tell" => config.ExportTells,
+        _ => true,
+    };
+
+    private void StartExport(List<LogEntry> lines, bool markdown)
+    {
+        // Build the text now, so the file matches what was chosen when you clicked Save.
         var content = LogExporter.Build(lines, pad.Name, markdown);
         var extension = markdown ? ".md" : ".txt";
+        var count = lines.Count;
 
         plugin.FileDialogs.SaveFileDialog("Export chat log", extension, LogExporter.DefaultFileName(pad.Name), extension,
             (ok, path) =>
@@ -974,7 +1065,7 @@ public sealed class PadView
                 {
                     if (!path.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) path += extension;
                     File.WriteAllText(path, content);
-                    SetStatus($"Exported {lines.Count} message(s) to {Path.GetFileName(path)}.", false);
+                    SetStatus($"Exported {count} message(s) to {Path.GetFileName(path)}.", false);
                 }
                 catch (Exception ex)
                 {

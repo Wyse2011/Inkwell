@@ -64,6 +64,19 @@ public class Configuration : IPluginConfiguration
     /// <summary>Colors you've picked for people (lowercase name). Others are chosen automatically.</summary>
     public Dictionary<string, Vector4> PersonColors = new();
 
+    // ---- Chat log export (remembered between exports) ----
+    public bool ExportSay = true;
+    public bool ExportCustomEmotes = true;
+    public bool ExportStandardEmotes = true;
+    public bool ExportYellShout = true;
+    public bool ExportParty = false;
+    public bool ExportFreeCompany = false;
+    public bool ExportLinkshells = false;
+    public bool ExportTells = false;
+    /// <summary>0 = everything, 1 = only the last ExportHours hours.</summary>
+    public int ExportTimeMode = 0;
+    public int ExportHours = 4;
+
     // ---- GPose ----
     public bool ShowInGpose = true;
     // Which channels can still send while in GPose. Separate true/false settings (rather than a
